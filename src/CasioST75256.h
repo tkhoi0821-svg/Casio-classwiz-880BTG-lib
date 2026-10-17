@@ -1,4 +1,4 @@
-// CasioST75256 v0.3.0 - driver for the 192x63 LCD of the fake Casio fx-880BTG (ST75256-compatible)
+// CasioST75256 v0.6.0 - driver for the 192x63 LCD of the fake Casio fx-880BTG (ST75256-compatible)
 // Author: GrayKazu
 //
 // Screen facts (found by sniffing + replaying on a real unit):
@@ -10,6 +10,9 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Print.h>
+#include <stdarg.h>
+#include "gfxfont.h"
+#include "CasioUFont.h"
 
 class CasioST75256 : public Print {
  public:
@@ -24,7 +27,7 @@ class CasioST75256 : public Print {
   // Reset, init, clear, display ON. Call after setMirror()/setColumnOffset() if you change them.
   bool begin(uint32_t spiHz = 1000000, bool clearScreen = true);
 
-  // Send the framebuffer to the LCD. v0.3.0: the buffer is diffed against what was last sent,
+  // Send the framebuffer to the LCD. v0.3.0+: the buffer is diffed against what was last sent,
   // and only the changed column runs of each page are transmitted (pass true to force a full refresh).
   void display(bool all = false);
   void markAllDirty() { _forceAll = true; }
@@ -76,13 +79,43 @@ class CasioST75256 : public Print {
   void fillRectDither(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t level, uint8_t c0 = 0, uint8_t c1 = 3);
   void drawProgressBar(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t percent, uint8_t color = 3);
   void invertRect(int16_t x, int16_t y, int16_t w, int16_t h);   // c -> 3 - c inside the rectangle
+  // Arc of a circle, angles in degrees: 0 = 3 o'clock, increasing clockwise (y points down).
+  void drawArc(int16_t cx, int16_t cy, int16_t r, int16_t startDeg, int16_t endDeg, uint8_t color = 3);
+  // Shift the dot area by (dx,dy) pixels in current-rotation coordinates; uncovered area gets `fill`.
+  void scroll(int16_t dx, int16_t dy, uint8_t fill = 0);
+  // ---- v0.4.0: UI building blocks ----
+  // Line with a square brush of `thickness` pixels.
+  void drawThickLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t thickness, uint8_t color = 3);
+  // Filled ring segment between radii rIn..rOut and angles a0..a1 (same angle convention as drawArc).
+  // Gauges: fillArc(cx, cy, 20, 26, 180, 360) draws a half ring; draw a lighter one underneath for the track.
+  void fillArc(int16_t cx, int16_t cy, int16_t rIn, int16_t rOut, int16_t a0, int16_t a1, uint8_t color = 3);
+  // Line graph of n samples scaled from vmin..vmax into the box (with a frame).
+  void drawGraph(int16_t x, int16_t y, int16_t w, int16_t h, const int16_t* data, uint16_t n,
+                 int16_t vmin, int16_t vmax, uint8_t color = 3);
+  size_t printf(const char* fmt, ...) __attribute__((format(printf, 2, 3)));   // print() with a format string
+  // Smoothly ramp the contrast (Vop) to `target` over about `ms` milliseconds (blocking).
+  void fadeTo(uint16_t target, uint16_t ms);
+  uint16_t getVop() const { return _vop; }
 
   // ---- text (5x7 font in a 6x8 cell, works with print()/println()) ----
   void setCursor(int16_t x, int16_t y) { _cx = x; _cy = y; }
   void setTextSize(uint8_t s)          { _ts = s ? s : 1; }
   void setTextColor(uint8_t fg, int16_t bg = -1) { _fg = fg; _bg = bg; }  // bg -1 = transparent
   void setTextWrap(bool w)             { _wrap = w; }                      // default true
+  // Custom font (GFXfont, see gfxfont.h). With a custom font the cursor y is the text BASELINE
+  // (like Adafruit GFX); setFont(nullptr) goes back to the built-in 5x7 font (cursor y = top).
+  void setFont(const GFXfont* f)       { _font = f; }
+  // Unicode fonts (v0.6.0): UTF-8 text with Vietnamese, Thai, Chinese... Include a font header and add it:
+  //   #include <CasioFont_VI.h>   ->  lcd.addUFont(&UFONT_VI);   lcd.print("Tiếng Việt");
+  // Up to 4 fonts are searched in the order they were added (so you can mix e.g. VI + TH + ZH_CN).
+  // Cursor y is the top of the cell. While a font is added it replaces the built-in 5x7 font.
+  bool addUFont(const UFont* f);
+  void clearUFonts()                   { _nU = 0; _u8n = 0; }
+  // Line height in pixels at size 1 for the active font (8 for the built-in font).
+  int16_t fontHeight() const           { return _font ? _font->yAdvance : (_nU ? _uf[0]->height : 8); }
   void drawChar(int16_t x, int16_t y, char c, uint8_t fg, int16_t bg, uint8_t size);
+  // Bounding box of `s` if printed with the cursor at (x,y) (handles '\n', current font and size).
+  void getTextBounds(const char* s, int16_t x, int16_t y, int16_t* x1, int16_t* y1, uint16_t* w, uint16_t* h);
   int16_t textWidth(const char* s) const;                 // width in pixels at the current size
   void printCentered(const char* s, int16_t y);           // horizontally centered at row y
   void printRight(const char* s, int16_t xRight, int16_t y);  // right edge of the text at xRight
@@ -100,6 +133,27 @@ class CasioST75256 : public Print {
   void defineIcon(uint8_t id, int16_t x0, int16_t x1);
   void icon(uint8_t id, bool on = true);
 
+  // ---- HAUNTED FX (v0.5.0): effects that work on the framebuffer, call display() afterwards ----
+  void fxSeed(uint32_t s)            { _rng = s ? s : 1; }          // seed the effect RNG (esp_random() etc.)
+  // Fade every pixel `amount` gray levels toward white: call each frame instead of clear() for ghost trails.
+  void fxDecay(uint8_t amount = 1);
+  // TV static: density 0..255 = chance a pixel is replaced by a random gray (<= maxLevel).
+  void fxNoise(uint8_t density, uint8_t maxLevel = 3);
+  // CRT look: every `step`-th row is dimmed by `dim` gray levels.
+  void fxScanlines(uint8_t step = 2, uint8_t dim = 1);
+  // Corrupt random horizontal bands (shifted with wrap-around, above 128 some are inverted). 0..255.
+  void fxGlitch(uint8_t intensity);
+  // Every column slides down by a random 0..strength pixels. Call repeatedly: the picture melts away.
+  void fxMelt(uint8_t strength = 2);
+  // Contrast flicker like a dying lamp (blocking; needs a working setVop).
+  void fxFlicker(uint8_t times = 5, uint16_t dim = 40);
+  // Contrast pulse: lub-dub, lub-dub (blocking; needs a working setVop).
+  void fxHeartbeat(uint8_t beats = 3, uint16_t amp = 60);
+  // Old TV switching off: the picture collapses to a line, then to a dot, then nothing (blocking, clears the screen).
+  void fxCrtOff(uint16_t ms = 400);
+  // Like print(), but letters jitter and sometimes turn into garbage. intensity 0..255.
+  void printCursed(const char* s, uint8_t intensity = 40);
+
   // ---- low level ----
   void writeCommand(uint8_t c) { tx(c, false); }
   void writeData(uint8_t d)    { tx(d, true); }
@@ -111,6 +165,10 @@ class CasioST75256 : public Print {
   void setRam(int16_t col, int16_t row, uint8_t c);
   uint8_t getRam(int16_t col, int16_t row);
   void put(int16_t x, int16_t y, uint8_t color);   // logical coords, no clipping
+  const UGlyph* uFind(uint16_t cp, const UFont** fo) const;
+  void putCodepoint(uint32_t cp);
+  void drawUGlyph(int16_t x, int16_t y, const UFont* f, const UGlyph* g, uint8_t fg, int16_t bg, uint8_t size);
+  int16_t uTextWidth(const char* s) const;
   void drawCircleQuad(int16_t cx, int16_t cy, int16_t r, uint8_t mask, uint8_t color);
 
   int8_t _cs, _a0, _rst, _sck, _sda;
@@ -118,6 +176,14 @@ class CasioST75256 : public Print {
   uint32_t _hz = 1000000;
   uint8_t _xOff = 0x40;
   uint8_t _rot = 0;
+  uint16_t _vop = 123;
+  const UFont* _uf[4];
+  uint8_t _nU = 0, _u8n = 0;
+  uint32_t _u8cp = 0;
+  int16_t _lastX = 0;
+  uint32_t _rng = 0x1BADB002;
+  uint32_t rnd() { _rng ^= _rng << 13; _rng ^= _rng >> 17; _rng ^= _rng << 5; return _rng; }
+  const GFXfont* _font = nullptr;
   bool _mirrorX = false, _mirrorY = true;
   bool _a0Inv = false, _block = false, _invertColors = false, _wrap = true, _forceAll = true;
   int16_t _cx = 0, _cy = 0, _bg = -1;
