@@ -1,4 +1,4 @@
-# CasioST75256 v0.6.0 (HAUNTED + WraithUI)
+# CasioST75256 v0.7.0 (HAUNTED + WraithUI + MJPEG)
 
 Author: GrayKazu
 
@@ -31,6 +31,20 @@ lcd.display();                               // send framebuffer to the LCD
 Tested on one unit (ESP32-S3, SPI mode 0, 1 MHz): init, drawing, 4-gray, icon row as a whole.
 Not verified: `setVop()` range, `begin(4000000)` stability, `setDisplayInverse()`, `sleep()`, `setBlockWrite(true)`, icon name -> column table (use the IconSweep example to map icons).
 The init sequence is copied from sniffed frames; `0x6E` and the delays around the OTP commands (E0/E3/E1) are unverified.
+
+## What's new in 0.7.0: MJPEG / JPEG -> 192x63 at 2 bits per pixel
+- **CasioJpeg**: a from-scratch baseline JPEG decoder that outputs the LCD's native format: 63 rows x 48 bytes, 4 pixels per byte MSB first, 0 = white .. 3 = black (exactly what `drawBitmap2bpp(0, 0, buf, 192, 63)` draws, 3024 bytes per frame).
+  ```cpp
+  CasioJpeg jpg; uint8_t frame[CasioJpeg::FRAME_BYTES];
+  if (jpg.decode(data, len, frame) == CasioJpeg::OK) { lcd.drawBitmap2bpp(0, 0, frame, 192, 63); lcd.display(); }
+  ```
+  - Luma only: chroma blocks are entropy-decoded and skipped, no colour conversion. Reduced-size IDCT (1/2, 1/4, 1/8) is used automatically when the source is much bigger than 192x63, so big frames cost little more than small ones.
+  - `setFit(STRETCH | FIT | FILL)` (letterbox / crop), `setDither(DITHER_BAYER | DITHER_FLOYD | DITHER_NONE)` (Bayer is the default: stable between frames, so video does not shimmer), `setBrightness()`, `setContrast()`, `setGamma()`, `setInvert()`, `setBackground(level)` for the letterbox bars.
+  - Supports baseline and extended-sequential Huffman JPEG, grayscale or YCbCr, 4:4:4 / 4:2:2 / 4:2:0 and other subsamplings, restart markers, custom Huffman tables, odd sizes up to 8192 px. Rejects progressive, arithmetic-coded, 12-bit and CMYK files with an error code instead of drawing garbage; corrupt data returns an error and never overwrites the output buffer.
+  - Memory: about 30 KB inside the object + a 48 KB accumulator allocated on the first decode.
+- **CasioMjpegReader / CasioMjpegPlayer**: split any Arduino `Stream` into JPEG frames (LittleFS/SD `File`, `WiFiClient` on an ESP32-CAM `/stream`, Serial) and play them with frame-rate pacing. Late frames are skipped (not decoded) so playback keeps its speed. Frames are found by walking JPEG markers, so multipart boundaries, junk between frames and EXIF thumbnails are handled. `shown()`, `skipped()`, `errors()`, `lastDecodeMs()` for diagnostics. See `examples/MjpegPlayer`.
+- Making a video: `ffmpeg -i input.mp4 -an -vf "scale=384:-2,fps=15" -c:v mjpeg -q:v 6 video.mjpeg`
+- Tests (`extras/host_test/build.sh`, needs g++, Python, Pillow, numpy): decoded luma stays within ~1-4 gray levels (out of 255) of Pillow's resize on 12 test images (4:4:4/4:2:2/4:2:0, q30-95, 8x8 to 4000x300, restart markers, optimized Huffman, grayscale), fit/fill geometry, dither tone preservation, progressive/truncated/garbage/bit-flipped input (no crashes, output untouched on error), splitter with odd chunk sizes + EXIF thumbnail + multipart junk + oversized frames, player pacing and catch-up. Decoding takes 0.3-2.4 ms per frame on a PC; I have **not** measured it on the ESP32-S3 yet (expect tens of times slower than a PC, so roughly 5-60 ms per frame depending on size and bitrate). Still **not run on hardware**.
 
 ## What's new in 0.6.0: Unicode fonts + WraithUI
 ### Vietnamese, Thai, Chinese
