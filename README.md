@@ -1,4 +1,4 @@
-# CasioST75256 v0.7.0 (HAUNTED + WraithUI + MJPEG)
+# CasioST75256 v0.9.0
 
 Author: GrayKazu
 
@@ -31,6 +31,23 @@ lcd.display();                               // send framebuffer to the LCD
 Tested on one unit (ESP32-S3, SPI mode 0, 1 MHz): init, drawing, 4-gray, icon row as a whole.
 Not verified: `setVop()` range, `begin(4000000)` stability, `setDisplayInverse()`, `sleep()`, `setBlockWrite(true)`, icon name -> column table (use the IconSweep example to map icons).
 The init sequence is copied from sniffed frames; `0x6E` and the delays around the OTP commands (E0/E3/E1) are unverified.
+
+## What's new in 0.9.0
+- **Compact antialiased Unicode fonts** (`CasioFont_VI_15.h`, `_TH_15.h`, `_ZH_CN_15.h`, `_ZH_TW_15.h`): 15 px cells drawn with 4 gray levels, so **4 lines** fit on the screen instead of 3. Glyphs are blended over whatever is behind them (white or black text, opaque or transparent background, gray shapes, text size 2+). Vietnamese uses DejaVu Sans, Thai uses Loma, Chinese uses Noto Sans CJK (SC / TC, 14 px). Thai marks are cut out of a shaped base letter, so they sit where the font designer put them, and tone marks that land on a vowel automatically use a *raised* twin. Flash: VI ~8 KB, TH ~6 KB, ZH_CN ~245 KB, ZH_TW ~350 KB. The crisp 16 px Unifont fonts stay available: mix and match, one font chain can hold both kinds.
+  - `UFont` has a new `bpp` field (0/1 = 1-bit, 2 = antialiased). Headers made with older versions of `font2c.py` keep working.
+  - `tools/font2c.py --aa --size 12 --height 15 --baseline 12 [--index N] [--engine raqm] [--boost 1.1]` makes your own antialiased fonts from any TTF/OTF/TTC.
+  - **Note:** I could only judge these from text-art renderings, not on your panel. If 4-gray text looks too soft or too thin, `--boost` (darker strokes) and the crisp 16 px fonts are the knobs.
+- **CasioQR**: QR code generator, versions 1-10 (the biggest that fits 63 px), numeric / alphanumeric / byte (UTF-8) modes, all four error-correction levels, automatic mask choice, optional free ECC boost. `qr.encode("https://...")`, `qr.wifi(ssid, password)` (escapes special characters), `qr.drawCentered(lcd)` or `qr.draw(lcd, x, y, scale, quiet)`, `bestScale()`, `capacityBytes()`. About 1.5 KB of RAM. Example: `QrDemo`. Short texts give 2 px modules and scan easily from a phone; version 10 at 1 px per module is possible but hard to scan from a screen.
+  - Verified with OpenCV's QR decoder: all 40 full-capacity codes (10 versions x 4 ECC levels) decode, plus numeric/alphanumeric tails, UTF-8 (Vietnamese, Chinese, Thai), URLs, Wi-Fi strings with escapes, and a code with 10 damaged modules still decoding at ECC_H. Not scanned off the real LCD yet.
+- Examples: `UnicodeCompact`, `QrDemo`. Tests: `extras/host_test/build.sh` now also covers the 2-bit font blending (exact pixel values), Thai raised tone marks, and the QR codes.
+
+## What's new in 0.8.0
+- **C2V pre-baked video** (`CasioC2v.h`, `tools/c2vtool.py`): encode a video / animated GIF / folder of images on the PC into a tiny `.c2v` (192x63, 2 bits per pixel, delta + run-length coded), play it with `CasioC2vPlayer`. No JPEG decoding on the ESP, so a frame costs microseconds; mostly static scenes take a few hundred bytes per frame (a test GIF came out at 344 B/frame, raw is 3024). Reads without blocking from any `Stream`, loops with a rewind function, keeps the frame rate (late frames are unpacked but not drawn). `c2vtool.py decode` turns a `.c2v` back into a GIF so you can preview exactly what the LCD shows. Same look options as CasioJpeg (`--fit`, `--dither`, `--contrast`, `--gamma`, `--invert`, `--bg`). Format is documented at the top of the tool. Example: `C2vPlayer`.
+- **CasioConsole**: scrolling terminal window, a `Print` object. Word-wraps by pixel width with whatever font is active (5x7, GFX or Unicode: UTF-8 characters are never split), keeps 24 lines, `scrollBack()`, optional cursor, any region of the screen. Example: `ConsoleDemo`.
+- **WraithUI slide transitions**: `TR_SLIDE_LEFT / RIGHT / UP / DOWN` (the new screen pushes the old one out, eased).
+- **CasioTween.h**: 10 easing functions (`CasioEase::OUT_BOUNCE`, `OUT_BACK`, `OUT_ELASTIC`...) and a tiny time-based `CasioTween` for your own animations.
+- `lcd.readFrame2bpp(buf)`: read the screen back into a packed 2bpp buffer (screenshots, transitions).
+- All host tests now live in `extras/host_test` (`./build.sh`): core drawing, Unicode fonts, WraithUI, console, easing, slide transitions, JPEG/MJPEG, C2V. The MJPEG decoder was also run on files made by a real ffmpeg (4:2:0, 4:4:4, 4:2:2, odd size): about 1% of the 4-gray pixels differ from a Pillow reference pipeline. Still **not run on hardware**.
 
 ## What's new in 0.7.0: MJPEG / JPEG -> 192x63 at 2 bits per pixel
 - **CasioJpeg**: a from-scratch baseline JPEG decoder that outputs the LCD's native format: 63 rows x 48 bytes, 4 pixels per byte MSB first, 0 = white .. 3 = black (exactly what `drawBitmap2bpp(0, 0, buf, 192, 63)` draws, 3024 bytes per frame).

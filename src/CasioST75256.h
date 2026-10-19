@@ -71,6 +71,9 @@ class CasioST75256 : public Print {
   void drawBitmap(int16_t x, int16_t y, const uint8_t* bmp, int16_t w, int16_t h, uint8_t color = 3, int16_t bg = -1);
   // 2-bit (4-gray) bitmap (PROGMEM ok), 4 pixels per byte, MSB first, rows padded to whole bytes.
   // transparent = gray value to skip (-1 = draw everything).
+  // Read the dot area back (current rotation) into a packed 2bpp buffer: ((width()+3)/4) bytes per row, height() rows.
+  // Returns the byte count (3024 for rotation 0, 3072 for 90/270). Same layout drawBitmap2bpp() reads.
+  size_t readFrame2bpp(uint8_t* out);
   void drawBitmap2bpp(int16_t x, int16_t y, const uint8_t* bmp, int16_t w, int16_t h, int16_t transparent = -1);
 
   // ---- v0.3.0 extras ----
@@ -181,6 +184,7 @@ class CasioST75256 : public Print {
   uint8_t _nU = 0, _u8n = 0;
   uint32_t _u8cp = 0;
   int16_t _lastX = 0;
+  bool _lastMark = false;
   uint32_t _rng = 0x1BADB002;
   uint32_t rnd() { _rng ^= _rng << 13; _rng ^= _rng >> 17; _rng ^= _rng << 5; return _rng; }
   const GFXfont* _font = nullptr;

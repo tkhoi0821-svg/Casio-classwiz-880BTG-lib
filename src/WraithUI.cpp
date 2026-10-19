@@ -1,4 +1,5 @@
 #include "WraithUI.h"
+#include "CasioTween.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -94,6 +95,12 @@ void WraithUI::show(uint8_t s, Trans t, uint16_t ms) {
   if (s == _screen && t == TR_NONE) return;
   if (t == TR_CRT) {                       // blocking: the old picture collapses, then the new screen appears
     _lcd.fxCrtOff(ms); switchScreen(s); return;
+  }
+  if (t >= TR_SLIDE_LEFT) {                // snapshot both screens, then slide them in update()
+    draw(); _lcd.readFrame2bpp(_snapOld);
+    switchScreen(s); draw(); _lcd.readFrame2bpp(_snapNew);
+    _tr = t; _trStart = _last; _trDur = ms; _trSwitched = true;
+    return;
   }
   if (t == TR_MELT) { _tr = t; _trNew = s; _trStart = _last; _trDur = ms; _trSwitched = false; return; }
   if (t != TR_NONE) { _tr = t; _trStart = _last; _trDur = ms; }
@@ -271,6 +278,17 @@ bool WraithUI::update(uint32_t now) {
     float q = 1.0f - p;
     if (_tr == TR_GLITCH)      { draw(); _lcd.fxGlitch((uint8_t)(255 * q)); _lcd.fxNoise((uint8_t)(90 * q), 2); }
     else if (_tr == TR_STATIC) { draw(); _lcd.fxNoise((uint8_t)(255 * q), 3); }
+    else if (_tr >= TR_SLIDE_LEFT) {
+      float e = CasioEase::apply(CasioEase::OUT_CUBIC, p);
+      int16_t W = _lcd.width(), H = _lcd.height();
+      int16_t dx = (_tr == TR_SLIDE_LEFT) ? -(int16_t)(e * W) : (_tr == TR_SLIDE_RIGHT) ? (int16_t)(e * W) : 0;
+      int16_t dy = (_tr == TR_SLIDE_UP) ? -(int16_t)(e * H) : (_tr == TR_SLIDE_DOWN) ? (int16_t)(e * H) : 0;
+      int16_t nx = dx + ((_tr == TR_SLIDE_LEFT) ? W : (_tr == TR_SLIDE_RIGHT) ? -W : 0);
+      int16_t ny = dy + ((_tr == TR_SLIDE_UP) ? H : (_tr == TR_SLIDE_DOWN) ? -H : 0);
+      _lcd.clear();
+      _lcd.drawBitmap2bpp(dx, dy, _snapOld, W, H);
+      _lcd.drawBitmap2bpp(nx, ny, _snapNew, W, H);
+    }
     else if (_tr == TR_MELT) {
       if (p < 0.5f) _lcd.fxMelt(3);                             // old picture melts away
       else {

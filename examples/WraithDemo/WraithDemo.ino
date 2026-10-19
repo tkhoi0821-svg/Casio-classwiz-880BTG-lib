@@ -16,7 +16,7 @@ uint8_t idMenu, idContrast, idHaunt, idBar, idGauge, idChart;
 
 void onEvent(uint8_t id, int16_t v) {
   if (id == idMenu) {
-    if (v == 0) ui.show(SCR_SETTINGS, WraithUI::TR_GLITCH);
+    if (v == 0) ui.show(SCR_SETTINGS, WraithUI::TR_SLIDE_LEFT, 350);
     else if (v == 1) ui.show(SCR_MONITOR, WraithUI::TR_STATIC);
     else ui.show(SCR_MONITOR, WraithUI::TR_MELT, 700);
   } else if (id == idContrast) lcd.setVop(100 + v);          // needs a working setVop()

@@ -825,9 +825,23 @@ const UGlyph* CasioST75256::uFind(uint16_t cp, const UFont** fo) const {
 }
 
 void CasioST75256::drawUGlyph(int16_t x, int16_t y, const UFont* f, const UGlyph* g, uint8_t fg, int16_t bg, uint8_t size) {
-  int16_t bpr = (g->w + 7) / 8;
   const uint8_t* bm = f->bitmap + g->off;
   bool mark = g->adv == 0;                       // marks never paint a background over their base
+  if (f->bpp == 2) {                             // antialiased: coverage 0..3 is blended between the background and fg
+    int16_t bpr = (g->w + 3) / 4;
+    for (int16_t j = 0; j < f->height; j++)
+      for (int16_t i = 0; i < g->w; i++) {
+        int v = (bm[j * bpr + i / 4] >> (6 - 2 * (i & 3))) & 3;
+        if (v == 0 && (bg < 0 || mark)) continue;
+        int16_t px = x + i * size, py = y + j * size;
+        int base = (bg >= 0 && !mark) ? bg : getPixel(px, py);
+        int diff = (int)fg - base;
+        int res = base + (diff * v * 2 + (diff >= 0 ? 3 : -3)) / 6;
+        fillRect(px, py, size, size, (uint8_t)res);
+      }
+    return;
+  }
+  int16_t bpr = (g->w + 7) / 8;
   for (int16_t j = 0; j < f->height; j++)
     for (int16_t i = 0; i < g->w; i++) {
       if (bm[j * bpr + i / 8] & (0x80 >> (i & 7))) fillRect(x + i * size, y + j * size, size, size, fg);
@@ -837,13 +851,23 @@ void CasioST75256::drawUGlyph(int16_t x, int16_t y, const UFont* f, const UGlyph
 
 void CasioST75256::putCodepoint(uint32_t cp) {
   int16_t lineH = _uf[0]->height * _ts;
-  if (cp == '\n') { _cx = 0; _cy += lineH; return; }
+  if (cp == '\n') { _cx = 0; _cy += lineH; _lastMark = false; return; }
   if (cp == '\r') return;
   const UFont* f = nullptr;
   const UGlyph* g = cp <= 0xFFFF ? uFind((uint16_t)cp, &f) : nullptr;
   if (!g) g = uFind('?', &f);
   if (!g) { _cx += 8 * _ts; return; }
-  if (g->adv == 0) { drawUGlyph(_lastX, _cy, f, g, _fg, _bg, _ts); return; }   // combining mark
+  if (g->adv == 0) {                                                         // combining mark
+    if (_lastMark && cp <= 0xFFFF) {                                         // mark on top of another mark: use the raised twin
+      const UFont* f2 = nullptr;
+      const UGlyph* r = uFind((uint16_t)(cp | 0xF000), &f2);
+      if (r) { g = r; f = f2; }
+    }
+    drawUGlyph(_lastX, _cy, f, g, _fg, _bg, _ts);
+    _lastMark = true;
+    return;
+  }
+  _lastMark = false;
   if (_wrap && _cx > 0 && _cx + g->adv * _ts > width()) { _cx = 0; _cy += lineH; }
   drawUGlyph(_cx, _cy, f, g, _fg, _bg, _ts);
   _lastX = _cx;
@@ -868,4 +892,12 @@ int16_t CasioST75256::uTextWidth(const char* s) const {
     w += (g ? g->adv : 8) * _ts;
   }
   return w;
+}
+
+size_t CasioST75256::readFrame2bpp(uint8_t* out) {
+  int16_t W = width(), H = height(), bpr = (W + 3) / 4;
+  memset(out, 0, (size_t)bpr * H);
+  for (int16_t y = 0; y < H; y++)
+    for (int16_t x = 0; x < W; x++) out[y * bpr + (x >> 2)] |= getPixel(x, y) << (6 - 2 * (x & 3));
+  return (size_t)bpr * H;
 }

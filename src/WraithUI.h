@@ -12,7 +12,8 @@
 class WraithUI {
  public:
   enum Key   { KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_OK, KEY_BACK };
-  enum Trans { TR_NONE, TR_GLITCH, TR_STATIC, TR_MELT, TR_CRT };
+  enum Trans { TR_NONE, TR_GLITCH, TR_STATIC, TR_MELT, TR_CRT,
+               TR_SLIDE_LEFT, TR_SLIDE_RIGHT, TR_SLIDE_UP, TR_SLIDE_DOWN };   // slide: the new screen pushes the old one out
   enum Align { LEFT, CENTER, RIGHT };
   static const uint8_t NONE = 0xFF;                       // "no widget" / pool full
   typedef void (*Handler)(uint8_t id, int16_t value);     // button: 1, slider: value, toggle/check: 0/1, list: index
@@ -88,4 +89,5 @@ class WraithUI {
   uint32_t _last = 0, _trStart = 0, _flashUntil = 0;
   uint16_t _trDur = 0;
   uint8_t _flashId = NONE;
+  uint8_t _snapOld[3072], _snapNew[3072];                 // frames for the slide transitions
 };
