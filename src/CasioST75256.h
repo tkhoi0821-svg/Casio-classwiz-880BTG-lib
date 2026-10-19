@@ -1,4 +1,4 @@
-// CasioST75256 v0.6.0 - driver for the 192x63 LCD of the fake Casio fx-880BTG (ST75256-compatible)
+// CasioST75256 - driver for the 192x63 LCD of the fake Casio fx-880BTG (ST75256-compatible)
 // Author: GrayKazu
 //
 // Screen facts (found by sniffing + replaying on a real unit):
@@ -7,6 +7,10 @@
 //   * 4-gray mode, 2 bits per pixel, 4 vertical pixels per byte
 //   * SPI mode 0, A0 low = command, A0 high = data
 #pragma once
+#define CASIO_ST75256_VERSION       "1.0.0"
+#define CASIO_ST75256_VERSION_MAJOR 1
+#define CASIO_ST75256_VERSION_MINOR 0
+#define CASIO_ST75256_VERSION_PATCH 0
 #include <Arduino.h>
 #include <SPI.h>
 #include <Print.h>
