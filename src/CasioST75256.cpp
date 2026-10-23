@@ -179,6 +179,7 @@ uint8_t CasioST75256::getRam(int16_t col, int16_t row) {
 
 // logical (rotated) coordinates -> physical RAM; caller guarantees x,y are inside width() x height()
 void CasioST75256::put(int16_t x, int16_t y, uint8_t color) {
+  if (x < _clip[0] || x > _clip[2] || y < _clip[1] || y > _clip[3]) return;
   if (_invertColors) color = 3 - (color & 3);
   int16_t px, py;
   switch (_rot) {
@@ -900,4 +901,131 @@ size_t CasioST75256::readFrame2bpp(uint8_t* out) {
   for (int16_t y = 0; y < H; y++)
     for (int16_t x = 0; x < W; x++) out[y * bpr + (x >> 2)] |= getPixel(x, y) << (6 - 2 * (x & 3));
   return (size_t)bpr * H;
+}
+
+// ---------------- word wrap (v1.1.0) ----------------
+static uint32_t u8decode(const char* p, int* len) {
+  uint8_t c = (uint8_t)p[0];
+  int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
+  uint32_t cp = n == 1 ? c : (n == 2 ? c & 0x1F : n == 3 ? c & 0x0F : c & 0x07);
+  int k = 1;
+  for (; k < n; k++) { if (((uint8_t)p[k] & 0xC0) != 0x80) break; cp = (cp << 6) | ((uint8_t)p[k] & 0x3F); }
+  *len = k;                                  // a broken sequence counts as what was valid (at least 1 byte)
+  return k == n ? cp : (uint32_t)c;
+}
+static bool isCombiningCp(uint32_t cp) {
+  return (cp >= 0x0300 && cp <= 0x036F) || cp == 0x0E31 || (cp >= 0x0E34 && cp <= 0x0E3A) || (cp >= 0x0E47 && cp <= 0x0E4E) ||
+         (cp >= 0x1AB0 && cp <= 0x1AFF) || (cp >= 0x20D0 && cp <= 0x20FF) || (cp >= 0xFE00 && cp <= 0xFE0F) || (cp >= 0xFE20 && cp <= 0xFE2F);
+}
+static bool isCjkCp(uint32_t cp) {
+  return (cp >= 0x2E80 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFF00 && cp <= 0xFFEF);
+}
+static bool noLineStart(uint32_t cp) {       // closing punctuation must not start a line
+  switch (cp) {
+    case 0x3001: case 0x3002: case 0xFF0C: case 0xFF0E: case 0xFF01: case 0xFF1F: case 0xFF1A: case 0xFF1B:
+    case 0xFF09: case 0x300D: case 0x300F: case 0x3011: case 0x2026: case 0x30FC: return true;
+    default: return cp == ',' || cp == '.' || cp == ';' || cp == ':' || cp == '!' || cp == '?' || cp == ')';
+  }
+}
+
+const char* CasioST75256::wrapLine(const char* p, int16_t w, const char** start, size_t* len) const {
+  if (!p || !*p) return nullptr;
+  while (*p == ' ') p++;                                    // no leading spaces on a wrapped line
+  const char* ls = p;
+  const char* cur = p;
+  const char* brkEnd = nullptr;                              // visible end of the line if we break at brk
+  const char* brk = nullptr;                                 // where the next line would start
+  auto widthTo = [&](const char* e) -> int16_t {
+    size_t n = e - ls; if (n >= 159) return 32767;
+    char tmp[160]; memcpy(tmp, ls, n); tmp[n] = 0; return textWidth(tmp);
+  };
+  while (*cur) {
+    int l; uint32_t cp = u8decode(cur, &l);
+    const char* nx = cur + l;
+    if (cp == '\n') { *start = ls; *len = cur - ls; while (*len && ls[*len - 1] == ' ') (*len)--; return *nx ? nx : (nx[-1] == '\n' && cur[1] == 0 ? nullptr : nx); }
+    if (cp != ' ') {
+      if (cur > ls && widthTo(nx) > w) {                     // this character does not fit
+        const char* e = brk ? brkEnd : cur;
+        const char* nextStart = brk ? brk : cur;
+        *start = ls; *len = e - ls;
+        return nextStart;
+      }
+    } else { brkEnd = cur; brk = nx; }
+    // can we break after this character?
+    if (cp != ' ' && *nx) {
+      int l2; uint32_t n2 = u8decode(nx, &l2);
+      bool ok = !isCombiningCp(n2) && n2 != ' ';
+      if (ok && (cp == '-' || ((isCjkCp(cp) || isCjkCp(n2)) && !noLineStart(n2)))) { brkEnd = nx; brk = nx; }
+    }
+    cur = nx;
+  }
+  *start = ls; *len = cur - ls;
+  while (*len && ls[*len - 1] == ' ') (*len)--;
+  return nullptr;
+}
+
+uint16_t CasioST75256::measureWrapped(const char* s, int16_t w) const {
+  uint16_t n = 0; const char* st; size_t len;
+  for (const char* p = s; p; ) { p = wrapLine(p, w, &st, &len); n++; if (n > 4000) break; }
+  return s && *s ? n : 0;
+}
+
+uint16_t CasioST75256::printWrapped(const char* s, int16_t x, int16_t y, int16_t w, uint16_t maxLines, TextAlign align, bool ellipsis) {
+  if (!s || !*s) return 0;
+  int16_t lh = fontHeight() * _ts;
+  bool savedWrap = _wrap; _wrap = false;
+  uint16_t lines = 0; const char* st; size_t len;
+  const char* p = s;
+  while (p && (!maxLines || lines < maxLines)) {
+    const char* next = wrapLine(p, w, &st, &len);
+    char tmp[200]; size_t n = len < sizeof(tmp) - 4 ? len : sizeof(tmp) - 4;
+    memcpy(tmp, st, n); tmp[n] = 0;
+    bool more = false;
+    if (next) { const char* q = next; while (*q == ' ' || *q == '\n') q++; more = *q != 0; }
+    if (ellipsis && maxLines && lines + 1 == maxLines && more) {         // last allowed line: make room for "..."
+      while (n > 0) {
+        char t2[210]; memcpy(t2, tmp, n); memcpy(t2 + n, "...", 4);
+        if (textWidth(t2) <= w) break;
+        n--; while (n > 0 && ((uint8_t)tmp[n] & 0xC0) == 0x80) n--;      // step back one whole UTF-8 character
+      }
+      memcpy(tmp + n, "...", 4);
+    }
+    int16_t tw = textWidth(tmp), x0 = x;
+    if (align == ALIGN_CENTER) x0 = x + (w - tw) / 2; else if (align == ALIGN_RIGHT) x0 = x + w - tw;
+    setCursor(x0, y + lines * lh);
+    print(tmp);
+    lines++;
+    p = next;
+  }
+  _wrap = savedWrap;
+  setCursor(x, y + lines * lh);
+  return lines;
+}
+
+// ---------------- screenshot (v1.1.0) ----------------
+bool CasioST75256::iconGet(int16_t x) {
+  if (x < 0 || x >= WIDTH) return false;
+  return getRam(_mirrorX ? (WIDTH - 1 - x) : x, 63) != 0;
+}
+
+void CasioST75256::dumpFrame(Print& out, bool icons) {
+  static const char HEX[] = "0123456789ABCDEF";
+  int16_t W = width(), H = height(), bpr = (W + 3) / 4;
+  uint32_t crc = 0xFFFFFFFFu;
+  out.print("CASIO-SHOT 1 "); out.print((int)W); out.print(" "); out.print((int)H); out.print(" "); out.print((int)_rot); out.write('\n');
+  for (int16_t y = 0; y < H; y++) {
+    for (int16_t b = 0; b < bpr; b++) {
+      uint8_t v = 0;
+      for (int k = 0; k < 4; k++) { int16_t x = b * 4 + k; v = (v << 2) | (x < W ? (getPixel(x, y) & 3) : 0); }
+      crc ^= v;
+      for (int i = 0; i < 8; i++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1)));
+      out.write(HEX[v >> 4]); out.write(HEX[v & 15]);
+    }
+    out.write('\n');
+  }
+  if (icons) { out.print("ICON "); for (int16_t x = 0; x < WIDTH; x++) out.write(iconGet(x) ? '1' : '0'); out.write('\n'); }
+  crc = ~crc;
+  out.print("CASIO-SHOT-END ");
+  for (int i = 28; i >= 0; i -= 4) out.write(HEX[(crc >> i) & 15]);
+  out.write('\n');
 }

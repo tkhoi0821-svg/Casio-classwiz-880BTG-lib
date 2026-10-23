@@ -1,4 +1,4 @@
-# CasioST75256 1.0.0
+# CasioST75256 1.1.0
 
 Author: GrayKazu
 
@@ -6,9 +6,9 @@ Arduino / ESP32 library for the 192x63 LCD (ST75256-compatible) of the fake Casi
 a 4-gray framebuffer with partial refresh, text in Vietnamese / Thai / Chinese, shapes, effects, a widget toolkit,
 QR codes and video playback.
 
-> **Status:** developed and tested on a host PC (unit tests, fuzzing, sanitizers, OpenCV, ffmpeg). Only the core driver
-> (init, drawing, 4-gray, icon row as a whole) has been tried on a real unit. Everything else is **not verified on
-> hardware yet**, see [Verified vs not verified](#verified-vs-not-verified).
+> **Status:** the author runs every release on a real unit (ESP32-S3) and reports it stable and light on resources
+> through 1.0. The 1.1 additions (WraithUI 2, big fonts, word wrap, clip rectangle) are verified on a host PC (unit tests,
+> fuzzing, sanitizers, OpenCV, ffmpeg) and still need your run on the unit. See [Verified](#verified).
 
 ## Install
 Arduino IDE: Sketch > Include Library > Add .ZIP Library, pick `CasioST75256.zip`. PlatformIO: `library.json` is included.
@@ -45,19 +45,19 @@ void loop() {}
 | Area | What you get | Header |
 |---|---|---|
 | Core | shapes, lines, round rects, triangles, arcs, thick lines, dithered fills, 1-bit and 2-bit bitmaps, scroll, invert, icon row (`defineIcon`), rotation, `readFrame2bpp` | `CasioST75256.h` |
-| Text | built-in 5x7, Adafruit-GFX-format fonts (`setFont`), UTF-8 Unicode fonts (`addUFont`), `printCentered/printRight/getTextBounds/printf` | same |
-| Unicode fonts | Vietnamese, Thai, Simplified and Traditional Chinese, in two families: crisp 16 px (`CasioFont_VI.h`, `_TH`, `_ZH_CN`, `_ZH_TW`) and compact antialiased 15 px, 4 lines on screen (`CasioFont_VI_15.h` ...) | `CasioFont_*.h` |
+| Text | built-in 5x7, Adafruit-GFX-format fonts (`setFont`), UTF-8 Unicode fonts (`addUFont`), `printCentered/printRight/getTextBounds/printf`, **word wrap** `printWrapped` (spaces, hyphens, CJK, never splits a letter from its marks), `setClipRect`, `dumpFrame` | same |
+| Unicode fonts | Vietnamese, Thai, Simplified and Traditional Chinese: crisp 16 px (`CasioFont_VI.h`, `_TH`, `_ZH_CN`, `_ZH_TW`), compact antialiased 15 px with 4 lines on screen (`CasioFont_VI_15.h` ...), plus **new** `CasioFont_VI_24.h` (24 px titles), `CasioFont_VI_15B.h` (bold) and `CasioFont_NUM_36.h` (36 px digits for clocks and readouts) | `CasioFont_*.h` |
 | Effects | ghost trails, static, scanlines, glitch, melt, flicker, heartbeat, CRT-off, cursed text | `fx*`, `printCursed` |
-| UI | `WraithUI`: label, button, bar, slider, toggle, checkbox, list, gauge, chart; screens, focus navigation, tweening, transitions (glitch, static, melt, CRT, slide) | `WraithUI.h` |
+| UI | **WraithUI 2**: 23 widgets (label, button, bar, slider, toggle, checkbox, list, gauge, chart, panel, textarea, input, dropdown, roller, spinbox, tabview, arc, meter, led, spinner, image, table, custom), containers with column / row / wrap layout and scrolling, themes and styles, popups (dropdown, msgbox, toast), events, animations, timers, screen stack, transitions | `WraithUI.h`, `docs/WRAITHUI.md` |
 | Console | scrolling terminal window with scrollback, UTF-8 aware | `CasioConsole.h` |
 | Animation | 10 easing functions and a tween | `CasioTween.h` |
 | QR codes | versions 1-10, numeric/alphanumeric/byte, all ECC levels, Wi-Fi helper | `CasioQR.h` |
 | Video | `CasioJpeg` (JPEG -> 192x63 2 bpp), `CasioMjpegPlayer` (any `Stream`), `CasioC2vPlayer` (pre-baked, tiny, no JPEG decoding) | `CasioJpeg.h`, `CasioMjpeg.h`, `CasioC2v.h` |
 | PC tools | `tools/img2c.py` (image -> array), `tools/font2c.py` (font -> header, 1-bit or antialiased), `tools/c2vtool.py` (video/GIF -> .c2v and back) | `tools/` |
 
-All the public functions are listed in `keywords.txt` (Arduino IDE highlighting) and commented in the headers. The
-examples folder has 14 sketches: `Basic`, `Animation`, `IconSweep`, `Showcase`, `Dashboard`, `Haunted`, `Fonts`,
-`UnicodeDemo`, `UnicodeCompact`, `WraithDemo`, `ConsoleDemo`, `QrDemo`, `MjpegPlayer`, `C2vPlayer`.
+API reference: `docs/API.md` (generated from the headers by `tools/gen_api.py`), WraithUI guide: `docs/WRAITHUI.md`,
+Arduino IDE highlighting: `keywords.txt`. The examples folder has 15 sketches: `Basic`, `Animation`, `IconSweep`, `Showcase`, `Dashboard`, `Haunted`, `Fonts`,
+`UnicodeDemo`, `UnicodeCompact`, `WraithDemo`, `WraithShowcase`, `ConsoleDemo`, `QrDemo`, `MjpegPlayer`, `C2vPlayer`.
 
 ### Unicode text in three lines
 ```cpp
@@ -86,32 +86,29 @@ refuses progressive and other unsupported files with an error code and never ove
 | `CasioST75256` (framebuffer + diff copy) | 6.4 KB |
 | `CasioConsole` | 2 KB |
 | `CasioQR` | 1.5 KB |
-| `WraithUI` (24 widgets + 2 slide snapshots) | 8.3 KB |
+| `WraithUI` (40 widgets, 2 KB text pool, 2 slide snapshots; `WRAITH_MAX_WIDGETS` / `WRAITH_TEXT_POOL` shrink it) | about 12 KB |
 | `CasioC2vPlayer` | 9.2 KB |
 | `CasioJpeg` (+ 48 KB heap on the first decode) | 30 KB |
 | `CasioMjpegPlayer` (+ your frame buffer, 16-32 KB typical) | 33.7 KB |
 
 Flash for fonts: VI 16 px 25 KB, TH 16 px 19 KB, ZH_CN 16 px 129 KB, ZH_TW 16 px 182 KB; VI 15 px 8 KB, TH 15 px 6 KB,
-ZH_CN 15 px 245 KB, ZH_TW 15 px 350 KB (data only; unused headers cost nothing).
+ZH_CN 15 px 245 KB, ZH_TW 15 px 350 KB, VI 24 px 22 KB, VI 15 px bold 8 KB, digits 36 px 24 KB (data only; unused headers cost nothing).
 
-## Verified vs not verified
-**Tried on a real unit** (ESP32-S3, SPI mode 0, 1 MHz): init, drawing, 4-gray, the icon row as a whole.
+## Verified
+**On the real unit (author's report):** every release up to 1.0 runs stably and lightly on the ESP32-S3 unit.
 
-**Verified on a host PC only** (`extras/host_test`, run `./build.sh`; needs g++, Python 3, Pillow, numpy; ffmpeg and OpenCV enable the video and QR tests):
-- framebuffer diffing (the fake LCD RAM always equals the framebuffer after `display()`), rotation, shapes, text, 1-bit/2-bit blending, UTF-8, Thai mark stacking
-- WraithUI navigation/events/tweening/transitions (slide frames compared pixel by pixel), console, easing
-- JPEG decoder against Pillow on 12 synthetic images and against ffmpeg-made MJPEG (4:2:0, 4:4:4, 4:2:2, odd size: about 1 % of the 4-gray pixels differ), plus truncated / garbage / bit-flipped input
-- MJPEG stream splitter (1-byte chunks, multipart junk, EXIF thumbnails, oversized frames), C2V round trip, looping, pacing, 40 corrupted-file fuzz runs
-- QR codes: all 40 full-capacity version x ECC combinations decode with OpenCV, plus modes, UTF-8, Wi-Fi escaping, damage tolerance
-- everything under AddressSanitizer + UBSan; sources build with `-std=gnu++11`; all 14 examples compile and run against stubs
+**On a host PC** (`extras/host_test`, `./build.sh`; needs g++, Python 3, Pillow, numpy; ffmpeg and OpenCV enable the video and QR tests):
+- framebuffer diffing (the fake LCD RAM always equals the framebuffer after `display()`), rotation, shapes, text, 1-bit/2-bit blending, UTF-8, Thai mark stacking, word wrap, clip rectangle
+- WraithUI 2: layout positions (probed with custom widgets), scrolling that follows focus, clipping, tabs, dropdown/msgbox/toast, key repeat and long press, UTF-8 input editing, text area, table, events, animations, timers, screen stack, themes, pools; the WraithUI 1 tests still pass unchanged
+- JPEG decoder against Pillow and against ffmpeg-made MJPEG, MJPEG splitter, C2V round trip and fuzzing, QR codes against OpenCV (all 40 version x ECC combinations)
+- everything under AddressSanitizer + UBSan; sources build with `-std=gnu++11`; all 15 examples compile and run against stubs (`smoke.py`)
 
-**Not verified on hardware:** `setVop()` / `fadeTo()` / `fxFlicker()` / `fxHeartbeat()` (the contrast range), `setDisplayInverse()`,
-`sleep()`, `setBlockWrite(true)`, SPI above 1 MHz (try 4 MHz and lower it if the picture is noisy), the icon name table
-(use `IconSweep`, then `defineIcon`), legibility of the antialiased 15 px fonts on the real panel, scanning a QR code off the
-real LCD, and **all timing**: decode/frame rates were only measured on a PC. The init sequence is copied from sniffed
-frames; `0x6E` and the delays around the OTP commands (E0/E3/E1) are unverified.
+I have no per-feature measurements from the real unit (frame times, contrast range, SPI limits, how the 15 px fonts or a scanned
+QR code look). The init sequence is copied from sniffed frames; `0x6E` and the delays around the OTP commands (E0/E3/E1) are unverified.
 
 ## Limits worth knowing
+- Vietnamese capitals with two stacked marks (e.g. Ẩ Ẫ Ể Ổ at 12 px) lose the top pixel row in `CasioFont_VI_15.h`: the cell is 15 px tall so that 4 lines fit. `tools/font2c.py` prints a warning with the exact glyphs when you generate your own.
+- WraithUI has no touch input and no content-sized containers (give panels an explicit size); popups are one at a time.
 - Unicode fonts are BMP only, no right-to-left, no automatic Thai word-breaking; marks are positioned by a fixed rule, not full shaping.
 - QR codes stop at version 10 (what fits 63 px at 1 px per module).
 - JPEG: baseline only, luma only (that is the point), no progressive.

@@ -7,9 +7,9 @@
 //   * 4-gray mode, 2 bits per pixel, 4 vertical pixels per byte
 //   * SPI mode 0, A0 low = command, A0 high = data
 #pragma once
-#define CASIO_ST75256_VERSION       "1.0.0"
+#define CASIO_ST75256_VERSION       "1.1.0"
 #define CASIO_ST75256_VERSION_MAJOR 1
-#define CASIO_ST75256_VERSION_MINOR 0
+#define CASIO_ST75256_VERSION_MINOR 1
 #define CASIO_ST75256_VERSION_PATCH 0
 #include <Arduino.h>
 #include <SPI.h>
@@ -48,6 +48,10 @@ class CasioST75256 : public Print {
   void displayOn(bool on);
   void sleep(bool on);
   void setVop(uint16_t vop);                           // contrast, 0..511, default 123 (0x7B)
+
+  // ---- clipping (v1.1.0): every drawing call is limited to this rectangle (logical coordinates) ----
+  void setClipRect(int16_t x, int16_t y, int16_t w, int16_t h) { _clip[0] = x; _clip[1] = y; _clip[2] = x + w - 1; _clip[3] = y + h - 1; }
+  void clearClipRect()  { _clip[0] = _clip[1] = -32768; _clip[2] = _clip[3] = 32767; }
 
   // ---- rotation (software, drawing only; the icon row is not rotated) ----
   // 0 = normal 192x63, 1 = 90 deg clockwise (63x192), 2 = 180, 3 = 270.
@@ -126,6 +130,19 @@ class CasioST75256 : public Print {
   int16_t textWidth(const char* s) const;                 // width in pixels at the current size
   void printCentered(const char* s, int16_t y);           // horizontally centered at row y
   void printRight(const char* s, int16_t xRight, int16_t y);  // right edge of the text at xRight
+  // ---- word wrap (v1.1.0): works with the built-in, GFX and Unicode fonts (UTF-8 aware) ----
+  enum TextAlign : uint8_t { ALIGN_LEFT, ALIGN_CENTER, ALIGN_RIGHT };
+  // Print s inside a box w pixels wide, first line at (x, y) (y = top of the line, or the baseline with a GFX font).
+  // Breaks at spaces and after '-', between any two CJK characters (never before closing punctuation such as ，。！？),
+  // never between a letter and its combining marks, and inside a word that is wider than the box. '\n' forces a break.
+  // maxLines 0 = no limit; with ellipsis the last allowed line ends in "..." when text is left over.
+  // Returns the number of lines drawn; the cursor ends up below the text.
+  uint16_t printWrapped(const char* s, int16_t x, int16_t y, int16_t w, uint16_t maxLines = 0,
+                        TextAlign align = ALIGN_LEFT, bool ellipsis = false);
+  uint16_t measureWrapped(const char* s, int16_t w) const;                   // number of lines printWrapped would use
+  // Low level: find the next wrapped line starting at p. *start/*len = the line (trailing spaces removed).
+  // Returns where the next line begins, or nullptr when the text is exhausted.
+  const char* wrapLine(const char* p, int16_t w, const char** start, size_t* len) const;
   size_t write(uint8_t c) override;
   using Print::write;
 
@@ -161,6 +178,13 @@ class CasioST75256 : public Print {
   // Like print(), but letters jitter and sometimes turn into garbage. intensity 0..255.
   void printCursed(const char* s, uint8_t intensity = 40);
 
+  // ---- screenshot over a stream (v1.1.0) ----
+  // Prints the dot area (current rotation) and the icon row as text: a header line, one hex line per row (2 bits per
+  // pixel, 4 pixels per byte), an ICON line and a CRC32 trailer. Capture it from the Serial Monitor and convert it to a
+  // PNG with tools/lcdshot.py. Typical use: lcd.dumpFrame(Serial);
+  void dumpFrame(Print& out, bool icons = true);
+  bool iconGet(int16_t x);                                  // is the icon-row pixel at column x lit?
+
   // ---- low level ----
   void writeCommand(uint8_t c) { tx(c, false); }
   void writeData(uint8_t d)    { tx(d, true); }
@@ -184,6 +208,7 @@ class CasioST75256 : public Print {
   uint8_t _xOff = 0x40;
   uint8_t _rot = 0;
   uint16_t _vop = 123;
+  int16_t _clip[4] = {-32768, -32768, 32767, 32767};
   const UFont* _uf[4];
   uint8_t _nU = 0, _u8n = 0;
   uint32_t _u8cp = 0;

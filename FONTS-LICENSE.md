@@ -9,7 +9,7 @@ read the original licenses, and ask a lawyer if you plan to ship firmware commer
 |---|---|---|
 | `CasioFont_VI.h`, `_TH.h`, `_ZH_CN.h`, `_ZH_TW.h` (16 px, 1-bit) | GNU Unifont (`fonts-unifont`) | GPL-2+ (the Debian copyright file lists GNU GPL version 2 or later) |
 | `CasioFont_TH_15.h` (Thai, 15 px antialiased) | Loma (TLWG `fonts-tlwg`, nectec/Loma) | "GPL-2+ with Font exception" |
-| `CasioFont_VI_15.h` (Vietnamese, 15 px) | DejaVu Sans (`fonts-dejavu-core`) | Bitstream Vera license + public-domain DejaVu changes |
+| `CasioFont_VI_15.h`, `CasioFont_VI_24.h`, `CasioFont_VI_15B.h`, `CasioFont_NUM_36.h` (Vietnamese / digits) | DejaVu Sans and DejaVu Sans Bold (`fonts-dejavu-core`) | Bitstream Vera license + public-domain DejaVu changes |
 | `CasioFont_ZH_CN_15.h`, `_ZH_TW_15.h` (Chinese, 15 px) | Noto Sans CJK SC / TC (`fonts-noto-cjk`) | SIL Open Font License 1.1 |
 
 ## What this means in practice
@@ -21,7 +21,7 @@ read the original licenses, and ask a lawyer if you plan to ship firmware commer
   (altered form) and end up inside *firmware*, not a document, so it is **not clear** that the exception applies.
   If you distribute firmware images containing `CasioFont_VI.h`, `_TH.h`, `_ZH_CN.h`, `_ZH_TW.h` or `CasioFont_TH_15.h`,
   you may have to offer the corresponding source of the firmware under the GPL. The simplest ways to stay clear:
-  - use only the permissive headers (`CasioFont_VI_15.h`, `CasioFont_ZH_CN_15.h`, `CasioFont_ZH_TW_15.h`) in firmware you distribute, and generate a Thai font from a font whose license you are comfortable with:
+  - use only the permissive headers (`CasioFont_VI_15.h`, `_VI_24`, `_VI_15B`, `_NUM_36`, `CasioFont_ZH_CN_15.h`, `CasioFont_ZH_TW_15.h`) in firmware you distribute, and generate a Thai font from a font whose license you are comfortable with:
     `python tools/font2c.py --font YourThaiFont.ttf --charset ascii,th --aa --size 13 --height 15 --baseline 12 --engine raqm --name UFONT_TH_15`
   - or keep the firmware for your own use (the GPL only matters when you distribute).
 - All of this applies to the font headers only. The library code (`LICENSE`, MIT) can be used as before.

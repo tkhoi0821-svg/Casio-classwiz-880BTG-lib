@@ -90,6 +90,17 @@ circle = {}
 if a.strip_circle and 0x25CC in cmap:
     circle[8] = render('\u25CC', 8)
 
+# diagnostics: ink that would fall above the first row of the cell (stacked diacritics, tall CJK strokes)
+_clip = []
+for _ch in chars:
+    try:
+        _b = face.getbbox(chr(ord(_ch) & 0x0FFF) if 0xFE47 <= ord(_ch) <= 0xFE4E else _ch, anchor='ls')
+    except Exception:
+        continue
+    if _b and -_b[1] > BASE and unicodedata.category(_ch) != 'Mn': _clip.append((_ch, -_b[1] - BASE))
+if _clip:
+    print(f'// WARNING: {len(_clip)} glyph(s) are clipped at the top by up to {max(c for _, c in _clip)} px; raise --baseline/--height or lower --size', file=sys.stderr)
+    print('// clipped at the top: ' + ' '.join(f'{c}(-{n})' for c, n in _clip[:12]) + (' ...' if len(_clip) > 12 else ''), file=sys.stderr)
 glyphs, bmp = [], bytearray()
 base_adv = int(round(face.getlength(THAI_BASE))) if 0x0E01 in cmap else 8
 for ch in chars:

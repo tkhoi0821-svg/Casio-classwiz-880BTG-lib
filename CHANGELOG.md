@@ -3,6 +3,23 @@
 All notable changes. Versions before 1.0.0 were developed without access to the real panel for most of the new
 features; see "Verified vs not verified" in the README.
 
+## 1.1.0
+- **WraithUI 2**: the widget toolkit grows from 9 to 23 widgets and gains the structure LVGL users expect. New widgets: panel,
+  textarea, input, dropdown, roller, spinbox, tabview, arc, meter, led, spinner, image, table, custom (your own draw
+  callback). Containers with column / row / wrapping-row layout, padding, gaps, scrolling with scrollbars that follows
+  the focus, and clipping. Themes (light, dark, gray, haunted) and per-widget `Style`. Popups: dropdown list, modal `msgbox`
+  with up to 3 buttons, `toast`. Per-widget event callbacks (`on`: click, value, focus, defocus, long press, char, open,
+  close, anim done), animations of position / size / value / scroll with easing, 4 timers, screen stack (`push/pop`),
+  long press and key repeat (`keyDown/keyUp`), UTF-8 text input (`typeChar/backspace`), label long modes (clip, dots,
+  wrap, marquee), vertical bars/sliders, disabled widgets. The WraithUI 1 API is unchanged and its tests still pass.
+  Guide: `docs/WRAITHUI.md`. Example: `WraithShowcase`.
+- **Fonts**: `CasioFont_VI_24.h` (24 px), `CasioFont_VI_15B.h` (bold 15 px), `CasioFont_NUM_36.h` (36 px digits).
+  `font2c.py` now warns about glyphs clipped at the top of the cell.
+- **Core**: `printWrapped` / `measureWrapped` / `wrapLine` (word wrap for every font, kinsoku for CJK, never splits a letter
+  from its combining marks), `setClipRect` / `clearClipRect`, `dumpFrame` + `iconGet` (screenshot as text).
+- **Docs**: `docs/API.md` generated from the headers (`tools/gen_api.py`), `docs/WRAITHUI.md`.
+- Known: the 15 px Vietnamese fonts lose the top pixel row of capitals with two stacked marks.
+
 ## 1.0.0
 - Release candidate-quality pass, no new drawing features. Quality gates added: the whole test suite and all 14 examples
   run under AddressSanitizer + UndefinedBehaviorSanitizer; sources compile with `-std=gnu++11` (older ESP32 Arduino cores);
