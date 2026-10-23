@@ -1009,7 +1009,7 @@ bool CasioST75256::iconGet(int16_t x) {
 }
 
 void CasioST75256::dumpFrame(Print& out, bool icons) {
-  static const char HEX[] = "0123456789ABCDEF";
+  static const char HEX_DIGITS[] = "0123456789ABCDEF"; 
   int16_t W = width(), H = height(), bpr = (W + 3) / 4;
   uint32_t crc = 0xFFFFFFFFu;
   out.print("CASIO-SHOT 1 "); out.print((int)W); out.print(" "); out.print((int)H); out.print(" "); out.print((int)_rot); out.write('\n');
@@ -1019,13 +1019,13 @@ void CasioST75256::dumpFrame(Print& out, bool icons) {
       for (int k = 0; k < 4; k++) { int16_t x = b * 4 + k; v = (v << 2) | (x < W ? (getPixel(x, y) & 3) : 0); }
       crc ^= v;
       for (int i = 0; i < 8; i++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1)));
-      out.write(HEX[v >> 4]); out.write(HEX[v & 15]);
+      out.write(HEX_DIGITS[v >> 4]); out.write(HEX_DIGITS[v & 15]);
     }
     out.write('\n');
   }
   if (icons) { out.print("ICON "); for (int16_t x = 0; x < WIDTH; x++) out.write(iconGet(x) ? '1' : '0'); out.write('\n'); }
   crc = ~crc;
   out.print("CASIO-SHOT-END ");
-  for (int i = 28; i >= 0; i -= 4) out.write(HEX[(crc >> i) & 15]);
+  for (int i = 28; i >= 0; i -= 4) out.write(HEX_DIGITS[(crc >> i) & 15]);
   out.write('\n');
 }
