@@ -1,6 +1,6 @@
 {
   "name": "CasioST75256",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Driver for the ST75256 192x63 LCD (+ icon row) of the fake Casio fx-880BTG: 4-gray framebuffer, Unicode fonts (VI/TH/ZH), QR codes, effects, WraithUI widgets, MJPEG and C2V video.",
   "keywords": "display, lcd, st75256, casio, esp32, unicode, qr, mjpeg",
   "authors": [{"name": "GrayKazu"}],

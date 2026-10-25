@@ -71,6 +71,7 @@ class WraithUI {
   uint8_t spinner (uint8_t scr, int16_t x, int16_t y, int16_t size);                             // loading indicator
   uint8_t image   (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, const uint8_t* bmp2bpp, int16_t transparent = -1);
   uint8_t table   (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, const char* const* cells, uint8_t cols, uint8_t rows, bool header = true);
+  uint8_t keyboard(uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t targetInput = NONE);   // on-screen keyboard: 5 rows, shift / symbols / space / delete / cursor / OK
   uint8_t custom  (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, DrawCb draw, void* user = nullptr, bool focusable = false);
 
   // ================= widget properties =================
@@ -78,6 +79,7 @@ class WraithUI {
   void    setLayout(uint8_t container, Layout l, uint8_t gap = 2, uint8_t pad = 2);
   void    setScrollable(uint8_t container, bool on);                       // vertical + horizontal; follows focus; scrollbars
   void    scrollTo(uint8_t container, int16_t x, int16_t y, uint16_t animMs = 0);
+  void    setTarget(uint8_t keyboard, uint8_t input) { if (id_ok(keyboard)) _w[keyboard].top = input; }   // which input a keyboard types into
   void    setText(uint8_t id, const char* text);                           // copied; truncated to the widget's capacity
   void    setTextRef(uint8_t id, const char* text);                        // NOT copied: must stay valid (flash strings, long texts)
   const char* text(uint8_t id) const;
@@ -146,7 +148,7 @@ class WraithUI {
 
  private:
   enum Type : uint8_t { T_FREE, T_LABEL, T_BUTTON, T_BAR, T_SLIDER, T_TOGGLE, T_CHECK, T_LIST, T_GAUGE, T_CHART, T_PANEL, T_TEXTAREA,
-                        T_INPUT, T_DROPDOWN, T_ROLLER, T_SPINBOX, T_TABVIEW, T_ARC, T_METER, T_LED, T_SPINNER, T_IMAGE, T_TABLE, T_CUSTOM };
+                        T_INPUT, T_DROPDOWN, T_ROLLER, T_SPINBOX, T_TABVIEW, T_ARC, T_METER, T_LED, T_SPINNER, T_IMAGE, T_TABLE, T_CUSTOM, T_KEYBOARD };
   enum : uint8_t { F_VISIBLE = 1, F_ENABLED = 2, F_FONTSET = 4, F_SCROLL = 8, F_VERT = 16, F_FOLLOW = 32, F_INTERACT = 64, F_HEADER = 128 };
   struct W {
     uint8_t type = T_FREE, screen = 0, parent = NONE, tab = NONE, flags = 0, align = 0, longMode = 0, layout = 0;
@@ -169,6 +171,14 @@ class WraithUI {
   void    initText(W& w, const char* t, uint16_t cap);
   char*   allocText(uint16_t cap);
   bool    alive(uint8_t id) const { return id < WRAITH_MAX_WIDGETS && _w[id].type != T_FREE; }
+  bool    id_ok(uint8_t id) const { return alive(id); }
+  bool    insertText(uint8_t input, const char* s);
+  bool    backspaceIn(uint8_t input);
+  void    inputMove(uint8_t input, int dir);
+  void    kbNav(W& w, Key k);
+  static char kbCode(uint8_t mode, int row, int col);
+  static void kbRun(uint8_t mode, int row, int col, int* s, int* e);
+  void    kbPress(uint8_t id);
   bool    isContainer(const W& w) const { return w.type == T_PANEL || w.type == T_TABVIEW; }
   bool    shown(uint8_t id) const;                              // visible, on the current screen, ancestors visible, tab active
   bool    focusable(uint8_t id) const;

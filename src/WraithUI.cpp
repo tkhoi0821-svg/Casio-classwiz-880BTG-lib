@@ -156,6 +156,9 @@ uint8_t WraithUI::table(uint8_t s, int16_t x, int16_t y, int16_t w, int16_t h, c
   uint8_t i = alloc(T_TABLE, s, x, y, w, h);
   if (i != NONE) { _w[i].p1 = cells; _w[i].cols = cols ? cols : 1; _w[i].n = rows; _w[i].flags |= F_INTERACT | (header ? F_HEADER : 0); } return i;
 }
+uint8_t WraithUI::keyboard(uint8_t s, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t target) {
+  uint8_t i = alloc(T_KEYBOARD, s, x, y, w, h); if (i != NONE) { _w[i].top = target; _w[i].val = 10; } return i;     // cursor starts on "q"
+}
 uint8_t WraithUI::custom(uint8_t s, int16_t x, int16_t y, int16_t w, int16_t h, DrawCb draw, void* user, bool focusable) {
   uint8_t i = alloc(T_CUSTOM, s, x, y, w, h); if (i != NONE) { _w[i].p1 = (const void*)draw; _w[i].user = user; if (focusable) _w[i].flags |= F_INTERACT; } return i;
 }
@@ -252,7 +255,7 @@ bool WraithUI::focusable(uint8_t id) const {
   if (!alive(id) || !shown(id) || !(_w[id].flags & F_ENABLED)) return false;
   switch (_w[id].type) {
     case T_BUTTON: case T_SLIDER: case T_TOGGLE: case T_CHECK: case T_LIST: case T_DROPDOWN: case T_ROLLER:
-    case T_SPINBOX: case T_TABVIEW: case T_INPUT: return true;
+    case T_SPINBOX: case T_TABVIEW: case T_INPUT: case T_KEYBOARD: return true;
     case T_TEXTAREA: case T_TABLE: case T_ARC: case T_CUSTOM: return (_w[id].flags & F_INTERACT) != 0;
     default: return false;
   }
@@ -552,6 +555,7 @@ void WraithUI::handleKey(Key k) {
     case T_TABVIEW:
       if (!vert) { int16_t v = f->val + d; if (v >= 0 && v < f->n) { f->val = v; _layoutDirty = true; ensureFocus(); emitValue(id, v); } } else moveFocus(d);
       return;
+    case T_KEYBOARD: kbNav(*f, k); return;
     case T_INPUT:
       if (!vert) {
         int16_t c = f->val;
@@ -571,6 +575,7 @@ void WraithUI::activate(uint8_t id) {
     case T_TOGGLE: case T_CHECK: w.val = !w.val; emitValue(id, w.val); break;
     case T_LIST: case T_ROLLER: case T_TABLE: emitClick(id, w.val); break;
     case T_DROPDOWN: openDropdown(id); break;
+    case T_KEYBOARD: kbPress(id); break;
     case T_INPUT: case T_SPINBOX: case T_CUSTOM: case T_ARC: emitClick(id, w.val); break;
     default: break;
   }
@@ -599,21 +604,73 @@ void WraithUI::keyUp(Key k) {
     _pressed = NONE; _dirty = true;
   } else if ((int8_t)k == _held) _held = -1;
 }
-bool WraithUI::typeChar(const char* s) {
-  if (!s || !*s || _focus == NONE || !alive(_focus) || _w[_focus].type != T_INPUT) return false;
-  W& w = _w[_focus]; size_t n = strlen(s), len = strlen(w.txt);
+static const char* const KB_ROWS[3][5] = {
+  {"1234567890", "qwertyuiop", "asdfghjkl\x04", "\x01zxcvbnm,.", "\x02\x06\x03\x03\x03\x03\x07\x05\x05\x05"},
+  {"1234567890", "QWERTYUIOP", "ASDFGHJKL\x04", "\x01ZXCVBNM,.", "\x02\x06\x03\x03\x03\x03\x07\x05\x05\x05"},
+  {"!@#$%^&*()", "-_=+[]{};:", "'\"/\\|<>?~\x04", "\x01`,.;:!?-+", "\x02\x06\x03\x03\x03\x03\x07\x05\x05\x05"}};
+// special key codes: 1 shift, 2 symbols, 3 space, 4 delete, 5 OK, 6 cursor left, 7 cursor right (equal neighbours form one wide key)
+char WraithUI::kbCode(uint8_t mode, int row, int col) { return KB_ROWS[mode > 2 ? 0 : mode][row][col]; }
+void WraithUI::kbRun(uint8_t mode, int row, int col, int* s, int* e) {
+  char c = kbCode(mode, row, col); int a = col, b = col;
+  if ((uint8_t)c < 8) { while (a > 0 && kbCode(mode, row, a - 1) == c) a--; while (b < 9 && kbCode(mode, row, b + 1) == c) b++; }
+  *s = a; *e = b;
+}
+void WraithUI::kbNav(W& w, Key k) {
+  int row = w.val / 10, col = w.val % 10, s, e; kbRun(w.n, row, col, &s, &e);
+  int d = (k == KEY_UP || k == KEY_LEFT) ? -1 : 1;
+  if (k == KEY_LEFT) { if (s > 0) col = s - 1; else { moveFocus(-1); return; } }
+  else if (k == KEY_RIGHT) { if (e < 9) col = e + 1; else { moveFocus(1); return; } }
+  else if (k == KEY_UP) { if (row > 0) row--; else { moveFocus(-1); return; } }
+  else { if (row < 4) row++; else { moveFocus(1); return; } }
+  (void)d; kbRun(w.n, row, col, &s, &e);
+  w.val = row * 10 + s;
+}
+bool WraithUI::insertText(uint8_t id, const char* s) {
+  if (!s || !*s || !alive(id) || _w[id].type != T_INPUT) return false;
+  W& w = _w[id]; size_t n = strlen(s), len = strlen(w.txt);
   if (len + n >= w.cap) return false;
   memmove(w.txt + w.val + n, w.txt + w.val, len - w.val + 1); memcpy(w.txt + w.val, s, n); w.val += n;
-  _dirty = true; fire(_focus, EV_CHAR, (int16_t)(uint8_t)s[0]); emitValue(_focus, (int16_t)(len + n));
+  _dirty = true; fire(id, EV_CHAR, (int16_t)(uint8_t)s[0]); emitValue(id, (int16_t)(len + n));
   return true;
 }
-bool WraithUI::backspace() {
-  if (_focus == NONE || !alive(_focus) || _w[_focus].type != T_INPUT || _w[_focus].val == 0) return false;
-  W& w = _w[_focus]; int c = w.val, e = c; c--;
+bool WraithUI::backspaceIn(uint8_t id) {
+  if (!alive(id) || _w[id].type != T_INPUT || _w[id].val == 0) return false;
+  W& w = _w[id]; int c = w.val, e = c; c--;
   while (c > 0 && ((uint8_t)w.txt[c] & 0xC0) == 0x80) c--;
   memmove(w.txt + c, w.txt + e, strlen(w.txt + e) + 1); w.val = c;
-  _dirty = true; emitValue(_focus, (int16_t)strlen(w.txt));
+  _dirty = true; emitValue(id, (int16_t)strlen(w.txt));
   return true;
+}
+void WraithUI::inputMove(uint8_t id, int dir) {
+  if (!alive(id) || _w[id].type != T_INPUT) return;
+  W& f = _w[id]; int16_t c = f.val;
+  if (dir < 0) { if (c > 0) { c--; while (c > 0 && ((uint8_t)f.txt[c] & 0xC0) == 0x80) c--; } }
+  else if (f.txt[c]) { c++; while (f.txt[c] && ((uint8_t)f.txt[c] & 0xC0) == 0x80) c++; }
+  f.val = c; _dirty = true;
+}
+void WraithUI::kbPress(uint8_t id) {
+  W& w = _w[id]; int row = w.val / 10, col = w.val % 10; char c = kbCode(w.n, row, col); uint8_t t = w.top;
+  _dirty = true;
+  switch ((uint8_t)c) {
+    case 1: w.n = (w.n == 0) ? 1 : 0; break;
+    case 2: w.n = (w.n == 2) ? 0 : 2; break;
+    case 3: insertText(t, " "); fire(id, EV_CHAR, ' '); break;
+    case 4: backspaceIn(t); break;
+    case 5: emitClick(id, 1); break;
+    case 6: inputMove(t, -1); break;
+    case 7: inputMove(t, 1); break;
+    default: { char s[2] = {c, 0}; insertText(t, s); fire(id, EV_CHAR, (int16_t)(uint8_t)c); if (w.n == 1) w.n = 0; break; }   // shift is one-shot
+  }
+}
+bool WraithUI::typeChar(const char* s) {
+  uint8_t t = _focus;
+  if (alive(t) && _w[t].type == T_KEYBOARD) t = _w[t].top;                 // a focused keyboard forwards to its input
+  return insertText(t, s);
+}
+bool WraithUI::backspace() {
+  uint8_t t = _focus;
+  if (alive(t) && _w[t].type == T_KEYBOARD) t = _w[t].top;
+  return backspaceIn(t);
 }
 
 // ================= frame loop =================

@@ -7,9 +7,9 @@
 //   * 4-gray mode, 2 bits per pixel, 4 vertical pixels per byte
 //   * SPI mode 0, A0 low = command, A0 high = data
 #pragma once
-#define CASIO_ST75256_VERSION       "1.1.0"
+#define CASIO_ST75256_VERSION       "1.2.0"
 #define CASIO_ST75256_VERSION_MAJOR 1
-#define CASIO_ST75256_VERSION_MINOR 1
+#define CASIO_ST75256_VERSION_MINOR 2
 #define CASIO_ST75256_VERSION_PATCH 0
 #include <Arduino.h>
 #include <SPI.h>

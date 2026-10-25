@@ -51,39 +51,34 @@ void CasioST75256::tx(uint8_t b, bool data) {
 }
 
 void CasioST75256::initSequence() {
-  // Hardware reset
   digitalWrite(_rst, HIGH); delay(10);
   digitalWrite(_rst, LOW);  delay(20);
   digitalWrite(_rst, HIGH); delay(100);
-
-  // Frame #0 of the captured init
   writeCommand(0x30);
-  writeCommand(0x6E);                       // kept as captured, meaning not verified
-  writeCommand(0x31);                       // extension 2
-  writeCommand(0xD7); writeData(0x9F);      // auto read control
-  writeCommand(0xE0); writeData(0x00); delay(20);   // OTP WR/RD control
-  writeCommand(0xE3); delay(30);            // OTP read
-  writeCommand(0xE1);                       // OTP control out
-  writeCommand(0x30);
-  writeCommand(0x94); delay(20);            // sleep out
-  writeCommand(0xAE);                       // display off
-
-  // Frame #1 of the captured init
-  writeCommand(0x20); writeData(0x0B); delay(20);               // power control
-  writeCommand(0x81); writeData(0x3B); writeData(0x01);         // Vop = 0x7B
+  writeCommand(0x6E);
   writeCommand(0x31);
-  writeCommand(0x20);                                           // gray levels
+  writeCommand(0xD7); writeData(0x9F);
+  writeCommand(0xE0); writeData(0x00); delay(20);
+  writeCommand(0xE3); delay(30);
+  writeCommand(0xE1);
+  writeCommand(0x30);
+  writeCommand(0x94); delay(20);
+  writeCommand(0xAE);
+  writeCommand(0x20); writeData(0x0B); delay(20);
+  writeCommand(0x81); writeData(0x3B); writeData(0x01);
+  writeCommand(0x31);
+  writeCommand(0x20);
   static const uint8_t gray[16] = {0x00,0x00,0x00,0x0D,0x0D,0x0D,0x00,0x00,
                                    0x16,0x00,0x00,0x16,0x16,0x16,0x00,0x00};
   for (uint8_t i = 0; i < 16; i++) writeData(gray[i]);
-  writeCommand(0xF0); writeData(0x08); writeData(0x08); writeData(0x0B); writeData(0x0D);  // frame rate
-  writeCommand(0x32); writeData(0x00); writeData(0x01); writeData(0x05);                   // analog
-  writeCommand(0x51); writeData(0xFA);                                                     // booster
+  writeCommand(0xF0); writeData(0x08); writeData(0x08); writeData(0x0B); writeData(0x0D);
+  writeCommand(0x32); writeData(0x00); writeData(0x01); writeData(0x05);
+  writeCommand(0x51); writeData(0xFA);
   writeCommand(0x30);
-  writeCommand(0xF0); writeData(0x11);                          // 4-gray mode
-  writeCommand(0xCA); writeData(0x00); writeData(0x3F); writeData(0x00);   // 64 duty
-  writeCommand(0xBC); writeData(0x02);                          // scan direction
-  writeCommand(0xA6);                                           // normal display
+  writeCommand(0xF0); writeData(0x11);
+  writeCommand(0xCA); writeData(0x00); writeData(0x3F); writeData(0x00);
+  writeCommand(0xBC); writeData(0x02);
+  writeCommand(0xA6);
 }
 
 bool CasioST75256::begin(uint32_t spiHz, bool clearScreen) {
@@ -99,12 +94,11 @@ bool CasioST75256::begin(uint32_t spiHz, bool clearScreen) {
 #endif
   initSequence();
   if (clearScreen) memset(fb, 0, sizeof(fb));
-  display(true);             // write RAM before turning the display on
+  display(true);
   writeCommand(0xAF);
   return true;
 }
 
-// ---------------- panel control ----------------
 void CasioST75256::setDisplayInverse(bool inv) { writeCommand(0x30); writeCommand(inv ? 0xA7 : 0xA6); }
 void CasioST75256::displayOn(bool on)          { writeCommand(0x30); writeCommand(on ? 0xAF : 0xAE); }
 void CasioST75256::sleep(bool on)              { writeCommand(0x30); writeCommand(on ? 0x95 : 0x94); }
@@ -115,7 +109,6 @@ void CasioST75256::setVop(uint16_t vop) {
   writeCommand(0x81); writeData(vop & 0x3F); writeData((vop >> 6) & 0x07);
 }
 
-// Send columns c0..c1 (inclusive) of one page, then remember them as "on the LCD".
 void CasioST75256::sendRun(uint8_t page, int16_t c0, int16_t c1) {
   writeCommand(0x75); writeData(page); writeData(page);
   writeCommand(0x15); writeData(_xOff + c0); writeData(_xOff + c1);
@@ -140,7 +133,7 @@ void CasioST75256::sendRun(uint8_t page, int16_t c0, int16_t c1) {
 }
 
 void CasioST75256::display(bool all) {
-  const int16_t GAP = 6;   // merge runs closer than this: cheaper than re-sending 3 commands
+  const int16_t GAP = 6;
   if (all || _forceAll) {
     writeCommand(0x30);
     for (uint8_t p = 0; p < 16; p++) sendRun(p, 0, WIDTH - 1);
@@ -165,7 +158,6 @@ void CasioST75256::display(bool all) {
   }
 }
 
-// ---------------- framebuffer ----------------
 void CasioST75256::setRam(int16_t col, int16_t row, uint8_t c) {
   if (col < 0 || col >= WIDTH || row < 0 || row >= 64) return;
   uint8_t& b = fb[row >> 2][col];
@@ -177,7 +169,6 @@ uint8_t CasioST75256::getRam(int16_t col, int16_t row) {
   return (fb[row >> 2][col] >> ((3 - (row & 3)) * 2)) & 3;
 }
 
-// logical (rotated) coordinates -> physical RAM; caller guarantees x,y are inside width() x height()
 void CasioST75256::put(int16_t x, int16_t y, uint8_t color) {
   if (x < _clip[0] || x > _clip[2] || y < _clip[1] || y > _clip[3]) return;
   if (_invertColors) color = 3 - (color & 3);
@@ -216,16 +207,15 @@ uint8_t CasioST75256::getPixel(int16_t x, int16_t y) {
 
 void CasioST75256::clear(uint8_t color) {
   if (_invertColors) color = 3 - (color & 3);
-  uint8_t pattern = (color & 3) * 0x55;   // same 2-bit value in all four pixels of a byte
+  uint8_t pattern = (color & 3) * 0x55;
   for (uint8_t p = 0; p < 16; p++)
     for (int16_t x = 0; x < WIDTH; x++) {
       if (p < 15) fb[p][x] = pattern;
-      else fb[p][x] = (pattern & 0xFC) | (fb[p][x] & 0x03);   // keep the icon row (row 64)
+      else fb[p][x] = (pattern & 0xFC) | (fb[p][x] & 0x03);
     }
   _cx = _cy = 0;
 }
 
-// ---------------- shapes ----------------
 void CasioST75256::drawFastHLine(int16_t x, int16_t y, int16_t w, uint8_t color) {
   if (w <= 0 || y < 0 || y >= height()) return;
   int16_t x1 = x + w - 1;
@@ -290,7 +280,7 @@ void CasioST75256::fillCircle(int16_t cx, int16_t cy, int16_t r, uint8_t color) 
   for (int16_t j = -r; j <= r; j++) {
     int32_t v = r2 - (int32_t)j * j;
     int16_t d = (int16_t)sqrtf((float)v);
-    while ((int32_t)(d + 1) * (d + 1) <= v) d++;     // exact integer floor(sqrt(v))
+    while ((int32_t)(d + 1) * (d + 1) <= v) d++;
     while ((int32_t)d * d > v) d--;
     drawFastHLine(cx - d, cy + j, 2 * d + 1, color);
   }
@@ -314,7 +304,6 @@ void CasioST75256::drawBitmap2bpp(int16_t x, int16_t y, const uint8_t* bmp, int1
     }
 }
 
-// ---------------- v0.3.0 extras ----------------
 void CasioST75256::fillRectDither(int16_t x, int16_t y, int16_t w, int16_t h, uint8_t level, uint8_t c0, uint8_t c1) {
   static const uint8_t bayer[4][4] = {{0, 8, 2, 10}, {12, 4, 14, 6}, {3, 11, 1, 9}, {15, 7, 13, 5}};
   for (int16_t j = 0; j < h; j++)
@@ -337,7 +326,6 @@ void CasioST75256::invertRect(int16_t x, int16_t y, int16_t w, int16_t h) {
     }
 }
 
-// mask bits: 1 = top-right, 2 = top-left, 4 = bottom-left, 8 = bottom-right
 void CasioST75256::drawCircleQuad(int16_t cx, int16_t cy, int16_t r, uint8_t m, uint8_t color) {
   int16_t x = r, y = 0, err = 1 - r;
   while (x >= y) {
@@ -393,12 +381,11 @@ void CasioST75256::drawTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, 
   drawLine(x2, y2, x0, y0, color);
 }
 
-// Scanline fill (much faster than testing every pixel of the bounding box).
 void CasioST75256::fillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t x2, int16_t y2, uint8_t color) {
   if (y0 > y1) { swap16(y0, y1); swap16(x0, x1); }
   if (y1 > y2) { swap16(y2, y1); swap16(x2, x1); }
   if (y0 > y1) { swap16(y0, y1); swap16(x0, x1); }
-  if (y0 == y2) {   // all on one row
+  if (y0 == y2) {
     int16_t a = x0, b = x0;
     if (x1 < a) a = x1; else if (x1 > b) b = x1;
     if (x2 < a) a = x2; else if (x2 > b) b = x2;
@@ -427,10 +414,9 @@ void CasioST75256::fillTriangle(int16_t x0, int16_t y0, int16_t x1, int16_t y1, 
     if (a > b) swap16(a, b);
     drawFastHLine(a, y, b - a + 1, color);
   }
-  drawTriangle(x0, y0, x1, y1, x2, y2, color);   // keep the edges solid
+  drawTriangle(x0, y0, x1, y1, x2, y2, color);
 }
 
-// ---------------- text ----------------
 void CasioST75256::drawChar(int16_t x, int16_t y, char c, uint8_t fg, int16_t bg, uint8_t size) {
   if (_font) {
     uint8_t ch = (uint8_t)c;
@@ -469,14 +455,14 @@ size_t CasioST75256::write(uint8_t c) {
     _cx += g->xAdvance * _ts;
     return 1;
   }
-  if (_nU) {                                   // UTF-8 decoder -> Unicode fonts
+  if (_nU) {
     if (_u8n) {
       if ((c & 0xC0) == 0x80) {
         _u8cp = (_u8cp << 6) | (c & 0x3F);
         if (--_u8n == 0) putCodepoint(_u8cp);
         return 1;
       }
-      _u8n = 0;                                // broken sequence: drop it and treat c as a new start
+      _u8n = 0;
     }
     if (c < 0x80) putCodepoint(c);
     else if ((c & 0xE0) == 0xC0) { _u8cp = c & 0x1F; _u8n = 1; }
@@ -486,14 +472,14 @@ size_t CasioST75256::write(uint8_t c) {
   }
   if (c == '\n') { _cx = 0; _cy += 8 * _ts; return 1; }
   if (c == '\r') return 1;
-  if (_wrap && _cx + 6 * _ts > width()) { _cx = 0; _cy += 8 * _ts; }   // wrap
+  if (_wrap && _cx + 6 * _ts > width()) { _cx = 0; _cy += 8 * _ts; }
   drawChar(_cx, _cy, (char)c, _fg, _bg, _ts);
   _cx += 6 * _ts;
   return 1;
 }
 int16_t CasioST75256::textWidth(const char* s) const {
   if (_nU && !_font) return uTextWidth(s);
-  if (_font) {                       // pen advance, ending at the right edge of the last glyph
+  if (_font) {
     int16_t pen = 0, right = 0;
     for (; *s; s++) {
       uint8_t ch = (uint8_t)*s;
@@ -520,7 +506,6 @@ void CasioST75256::printRight(const char* s, int16_t xRight, int16_t y) {
   print(s);
 }
 
-// ---------------- icon row (RAM row 64) ----------------
 void CasioST75256::iconSet(int16_t x0, int16_t x1, bool on) {
   if (x0 > x1) swap16(x0, x1);
   for (int16_t x = x0; x <= x1; x++) {
@@ -542,7 +527,7 @@ void CasioST75256::icon(uint8_t id, bool on) {
 }
 
 void CasioST75256::getTextBounds(const char* s, int16_t x, int16_t y, int16_t* x1, int16_t* y1, uint16_t* w, uint16_t* h) {
-  if (_nU && !_font) {                       // Unicode fonts: width of the widest line, lines * height
+  if (_nU && !_font) {
     int16_t maxW = 0, lines = 1;
     const char* start = s;
     for (const char* p = s;; p++) {
@@ -568,7 +553,7 @@ void CasioST75256::getTextBounds(const char* s, int16_t x, int16_t y, int16_t* x
   }
   if (lineW > maxW) maxW = lineW;
   if (_font) {
-    *x1 = x; *y1 = y - _font->yAdvance * _ts * 3 / 4;     // baseline-relative approximation
+    *x1 = x; *y1 = y - _font->yAdvance * _ts * 3 / 4;
     *h = lines * _font->yAdvance * _ts;
   } else {
     *x1 = x; *y1 = y; *h = lines * 8 * _ts;
@@ -580,7 +565,7 @@ void CasioST75256::drawArc(int16_t cx, int16_t cy, int16_t r, int16_t a0, int16_
   if (r <= 0) { drawPixel(cx, cy, color); return; }
   while (a1 < a0) a1 += 360;
   if (a1 - a0 > 360) a1 = a0 + 360;
-  float step = 57.2958f / (float)r;            // about one pixel of arc per step
+  float step = 57.2958f / (float)r;
   if (step > 5.0f) step = 5.0f;
   for (float a = a0; a <= a1 + 0.001f; a += step) {
     float rad = a * 0.0174533f;
@@ -600,7 +585,6 @@ void CasioST75256::scroll(int16_t dx, int16_t dy, uint8_t fill) {
     }
 }
 
-// ---------------- v0.4.0 ----------------
 void CasioST75256::drawThickLine(int16_t x0, int16_t y0, int16_t x1, int16_t y1, int16_t t, uint8_t color) {
   if (t <= 1) { drawLine(x0, y0, x1, y1, color); return; }
   int16_t dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
@@ -679,13 +663,12 @@ void CasioST75256::fadeTo(uint16_t target, uint16_t ms) {
   }
 }
 
-// ---------------- HAUNTED FX (v0.5.0) ----------------
 void CasioST75256::fxDecay(uint8_t amount) {
   if (!amount) return;
   for (uint8_t p = 0; p < 16; p++)
     for (int16_t x = 0; x < WIDTH; x++) {
       uint8_t b = fb[p][x], out = 0;
-      uint8_t fields = (p == 15) ? 3 : 4;          // keep the icon row (last field of page 15)
+      uint8_t fields = (p == 15) ? 3 : 4;
       for (uint8_t f = 0; f < fields; f++) {
         uint8_t sh = 6 - 2 * f, v = (b >> sh) & 3;
         v = v > amount ? v - amount : 0;
@@ -757,9 +740,9 @@ void CasioST75256::fxFlicker(uint8_t times, uint16_t dim) {
 void CasioST75256::fxHeartbeat(uint8_t beats, uint16_t amp) {
   uint16_t base = _vop;
   for (uint8_t i = 0; i < beats; i++) {
-    fadeTo(base + amp, 60);           // lub
+    fadeTo(base + amp, 60);
     fadeTo(base, 60);
-    fadeTo(base + amp * 2 / 3, 60);   // dub
+    fadeTo(base + amp * 2 / 3, 60);
     fadeTo(base, 200);
   }
 }
@@ -771,7 +754,7 @@ void CasioST75256::fxCrtOff(uint16_t ms) {
   int16_t W = width(), H = height(), cx = W / 2, cy = H / 2;
   const uint8_t F1 = 8, F2 = 5;
   uint16_t wait = ms / (F1 + F2 + 1);
-  for (uint8_t i = 1; i <= F1; i++) {                     // collapse vertically
+  for (uint8_t i = 1; i <= F1; i++) {
     memcpy(fb, snap, sizeof(fb));
     int16_t bh = H >> i; if (bh < 1) bh = 1;
     int16_t top = cy - bh / 2;
@@ -779,7 +762,7 @@ void CasioST75256::fxCrtOff(uint16_t ms) {
     fillRect(0, top + bh, W, H - top - bh, 0);
     display(); delay(wait);
   }
-  for (uint8_t i = 1; i <= F2; i++) {                     // line shrinks to a dot
+  for (uint8_t i = 1; i <= F2; i++) {
     clear();
     int16_t lw = W >> i; if (lw < 2) lw = 2;
     fillRect(cx - lw / 2, cy, lw, 1, 3);
@@ -799,12 +782,11 @@ void CasioST75256::printCursed(const char* s, uint8_t intensity) {
     if ((rnd() & 255) < intensity) { dx = (int16_t)(rnd() % 3) - 1; dy = (int16_t)(rnd() % 3) - 1; }
     _cx = bx + dx; _cy = by + dy;
     if (len == 1 && *s != ' ' && (rnd() & 255) < intensity / 4) { write((uint8_t)junk[rnd() % (sizeof(junk) - 1)]); s++; }
-    else for (int k = 0; k < len && *s; k++, s++) write((uint8_t)*s);     // whole UTF-8 sequence together
+    else for (int k = 0; k < len && *s; k++, s++) write((uint8_t)*s);
     _cx -= dx; _cy = by;
   }
 }
 
-// ---------------- Unicode fonts (v0.6.0) ----------------
 bool CasioST75256::addUFont(const UFont* f) {
   if (!f || _nU >= 4) return false;
   _uf[_nU++] = f;
@@ -827,8 +809,8 @@ const UGlyph* CasioST75256::uFind(uint16_t cp, const UFont** fo) const {
 
 void CasioST75256::drawUGlyph(int16_t x, int16_t y, const UFont* f, const UGlyph* g, uint8_t fg, int16_t bg, uint8_t size) {
   const uint8_t* bm = f->bitmap + g->off;
-  bool mark = g->adv == 0;                       // marks never paint a background over their base
-  if (f->bpp == 2) {                             // antialiased: coverage 0..3 is blended between the background and fg
+  bool mark = g->adv == 0;
+  if (f->bpp == 2) {
     int16_t bpr = (g->w + 3) / 4;
     for (int16_t j = 0; j < f->height; j++)
       for (int16_t i = 0; i < g->w; i++) {
@@ -858,8 +840,8 @@ void CasioST75256::putCodepoint(uint32_t cp) {
   const UGlyph* g = cp <= 0xFFFF ? uFind((uint16_t)cp, &f) : nullptr;
   if (!g) g = uFind('?', &f);
   if (!g) { _cx += 8 * _ts; return; }
-  if (g->adv == 0) {                                                         // combining mark
-    if (_lastMark && cp <= 0xFFFF) {                                         // mark on top of another mark: use the raised twin
+  if (g->adv == 0) {
+    if (_lastMark && cp <= 0xFFFF) {
       const UFont* f2 = nullptr;
       const UGlyph* r = uFind((uint16_t)(cp | 0xF000), &f2);
       if (r) { g = r; f = f2; }
@@ -903,14 +885,13 @@ size_t CasioST75256::readFrame2bpp(uint8_t* out) {
   return (size_t)bpr * H;
 }
 
-// ---------------- word wrap (v1.1.0) ----------------
 static uint32_t u8decode(const char* p, int* len) {
   uint8_t c = (uint8_t)p[0];
   int n = c < 0x80 ? 1 : (c >> 5) == 6 ? 2 : (c >> 4) == 14 ? 3 : (c >> 3) == 30 ? 4 : 1;
   uint32_t cp = n == 1 ? c : (n == 2 ? c & 0x1F : n == 3 ? c & 0x0F : c & 0x07);
   int k = 1;
   for (; k < n; k++) { if (((uint8_t)p[k] & 0xC0) != 0x80) break; cp = (cp << 6) | ((uint8_t)p[k] & 0x3F); }
-  *len = k;                                  // a broken sequence counts as what was valid (at least 1 byte)
+  *len = k;
   return k == n ? cp : (uint32_t)c;
 }
 static bool isCombiningCp(uint32_t cp) {
@@ -920,7 +901,7 @@ static bool isCombiningCp(uint32_t cp) {
 static bool isCjkCp(uint32_t cp) {
   return (cp >= 0x2E80 && cp <= 0xD7AF) || (cp >= 0xF900 && cp <= 0xFAFF) || (cp >= 0xFF00 && cp <= 0xFFEF);
 }
-static bool noLineStart(uint32_t cp) {       // closing punctuation must not start a line
+static bool noLineStart(uint32_t cp) {
   switch (cp) {
     case 0x3001: case 0x3002: case 0xFF0C: case 0xFF0E: case 0xFF01: case 0xFF1F: case 0xFF1A: case 0xFF1B:
     case 0xFF09: case 0x300D: case 0x300F: case 0x3011: case 0x2026: case 0x30FC: return true;
@@ -930,11 +911,11 @@ static bool noLineStart(uint32_t cp) {       // closing punctuation must not sta
 
 const char* CasioST75256::wrapLine(const char* p, int16_t w, const char** start, size_t* len) const {
   if (!p || !*p) return nullptr;
-  while (*p == ' ') p++;                                    // no leading spaces on a wrapped line
+  while (*p == ' ') p++;
   const char* ls = p;
   const char* cur = p;
-  const char* brkEnd = nullptr;                              // visible end of the line if we break at brk
-  const char* brk = nullptr;                                 // where the next line would start
+  const char* brkEnd = nullptr;
+  const char* brk = nullptr;
   auto widthTo = [&](const char* e) -> int16_t {
     size_t n = e - ls; if (n >= 159) return 32767;
     char tmp[160]; memcpy(tmp, ls, n); tmp[n] = 0; return textWidth(tmp);
@@ -944,14 +925,13 @@ const char* CasioST75256::wrapLine(const char* p, int16_t w, const char** start,
     const char* nx = cur + l;
     if (cp == '\n') { *start = ls; *len = cur - ls; while (*len && ls[*len - 1] == ' ') (*len)--; return *nx ? nx : (nx[-1] == '\n' && cur[1] == 0 ? nullptr : nx); }
     if (cp != ' ') {
-      if (cur > ls && widthTo(nx) > w) {                     // this character does not fit
+      if (cur > ls && widthTo(nx) > w) {
         const char* e = brk ? brkEnd : cur;
         const char* nextStart = brk ? brk : cur;
         *start = ls; *len = e - ls;
         return nextStart;
       }
     } else { brkEnd = cur; brk = nx; }
-    // can we break after this character?
     if (cp != ' ' && *nx) {
       int l2; uint32_t n2 = u8decode(nx, &l2);
       bool ok = !isCombiningCp(n2) && n2 != ' ';
@@ -982,11 +962,11 @@ uint16_t CasioST75256::printWrapped(const char* s, int16_t x, int16_t y, int16_t
     memcpy(tmp, st, n); tmp[n] = 0;
     bool more = false;
     if (next) { const char* q = next; while (*q == ' ' || *q == '\n') q++; more = *q != 0; }
-    if (ellipsis && maxLines && lines + 1 == maxLines && more) {         // last allowed line: make room for "..."
+    if (ellipsis && maxLines && lines + 1 == maxLines && more) {
       while (n > 0) {
         char t2[210]; memcpy(t2, tmp, n); memcpy(t2 + n, "...", 4);
         if (textWidth(t2) <= w) break;
-        n--; while (n > 0 && ((uint8_t)tmp[n] & 0xC0) == 0x80) n--;      // step back one whole UTF-8 character
+        n--; while (n > 0 && ((uint8_t)tmp[n] & 0xC0) == 0x80) n--;
       }
       memcpy(tmp + n, "...", 4);
     }
@@ -1002,14 +982,13 @@ uint16_t CasioST75256::printWrapped(const char* s, int16_t x, int16_t y, int16_t
   return lines;
 }
 
-// ---------------- screenshot (v1.1.0) ----------------
 bool CasioST75256::iconGet(int16_t x) {
   if (x < 0 || x >= WIDTH) return false;
   return getRam(_mirrorX ? (WIDTH - 1 - x) : x, 63) != 0;
 }
 
 void CasioST75256::dumpFrame(Print& out, bool icons) {
-  static const char HEX_DIGITS[] = "0123456789ABCDEF"; 
+  static const char HEX_CHARS[] = "0123456789ABCDEF";
   int16_t W = width(), H = height(), bpr = (W + 3) / 4;
   uint32_t crc = 0xFFFFFFFFu;
   out.print("CASIO-SHOT 1 "); out.print((int)W); out.print(" "); out.print((int)H); out.print(" "); out.print((int)_rot); out.write('\n');
@@ -1019,13 +998,13 @@ void CasioST75256::dumpFrame(Print& out, bool icons) {
       for (int k = 0; k < 4; k++) { int16_t x = b * 4 + k; v = (v << 2) | (x < W ? (getPixel(x, y) & 3) : 0); }
       crc ^= v;
       for (int i = 0; i < 8; i++) crc = (crc >> 1) ^ (0xEDB88320u & (0u - (crc & 1)));
-      out.write(HEX_DIGITS[v >> 4]); out.write(HEX_DIGITS[v & 15]);
+      out.write(HEX_CHARS[v >> 4]); out.write(HEX_CHARS[v & 15]);
     }
     out.write('\n');
   }
   if (icons) { out.print("ICON "); for (int16_t x = 0; x < WIDTH; x++) out.write(iconGet(x) ? '1' : '0'); out.write('\n'); }
   crc = ~crc;
   out.print("CASIO-SHOT-END ");
-  for (int i = 28; i >= 0; i -= 4) out.write(HEX_DIGITS[(crc >> i) & 15]);
+  for (int i = 28; i >= 0; i -= 4) out.write(HEX_CHARS[(crc >> i) & 15]);
   out.write('\n');
 }

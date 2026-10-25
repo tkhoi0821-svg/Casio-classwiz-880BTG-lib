@@ -315,6 +315,28 @@ void WraithUI::drawWidget(uint8_t id, int16_t ax, int16_t ay, bool foc) {
       if (dataRows > vis) { int16_t th = imax(4, (int16_t)((w.h - 2) * vis / dataRows)), ty = ay + 1 + (w.h - 2 - th) * w.top / imax(1, dataRows - vis); _lcd.fillRect(ax + w.w - 3, ty, 2, th, c.accent); }
       break;
     }
+    case T_KEYBOARD: {
+      _lcd.clearUFonts();                                     // the keys always use the built-in 5x7 font
+      int16_t cw = w.w / 10, chh = imax((int16_t)9, (int16_t)(w.h / 5)), sel = w.val;
+      static const char* LAB[8] = {"", "", "#+=", "", "DEL", "OK", "<", ">"};
+      for (int row = 0; row < 5; row++)
+        for (int col = 0; col < 10; col++) {
+          int s, e; kbRun(w.n, row, col, &s, &e);
+          if (col != s) continue;                              // draw each (possibly wide) key once
+          char code = kbCode(w.n, row, col); int16_t kx = ax + s * cw, ky = ay + row * chh, kw = (e - s + 1) * cw;
+          bool cur = (sel / 10 == row) && (sel % 10 >= s && sel % 10 <= e), on = cur && foc && !dis;
+          if (on) _lcd.fillRect(kx, ky, kw, chh, c.fbg); else _lcd.drawRect(kx, ky, kw + 1, chh + 1, cur ? c.fg : c.track);
+          uint8_t tc = on ? c.ffg : fg; _lcd.setTextColor(tc);
+          int16_t cx = kx + kw / 2, cy = ky + chh / 2;
+          if ((uint8_t)code >= 32) { char s2[2] = {code, 0}; _lcd.setCursor(kx + (kw - 5) / 2 + 1, ky + (chh - 7) / 2 + 1); _lcd.print(s2); }
+          else if (code == 1) { if (w.n == 1) _lcd.fillTriangle(cx - 3, cy + 2, cx + 3, cy + 2, cx, cy - 3, tc); else _lcd.drawTriangle(cx - 3, cy + 2, cx + 3, cy + 2, cx, cy - 3, tc); }
+          else if (code == 3) _lcd.drawFastHLine(cx - kw / 2 + 4, cy + 1, kw - 8, tc);
+          else if (code == 6) _lcd.fillTriangle(cx - 2, cy, cx + 2, cy - 3, cx + 2, cy + 3, tc);
+          else if (code == 7) _lcd.fillTriangle(cx + 2, cy, cx - 2, cy - 3, cx - 2, cy + 3, tc);
+          else { const char* t2 = (code == 2 && w.n == 2) ? "abc" : LAB[(uint8_t)code]; _lcd.setCursor(kx + (kw - (int16_t)(strlen(t2) * 6 - 1)) / 2, ky + (chh - 7) / 2 + 1); _lcd.print(t2); }
+        }
+      break;
+    }
     case T_CUSTOM: {
       Rect old = pushClip(ax, ay, w.w, w.h);
       if (w.p1) ((DrawCb)w.p1)(*this, _lcd, id, ax, ay, w.w, w.h, foc, w.user);

@@ -21,6 +21,7 @@ Create with `ui.<widget>(screen, x, y, ...)`; you get an id (`WraithUI::NONE` wh
 | `textarea` `input` | multi-line wrapped log (scrolls, follows the end) / one-line editor |
 | `panel` `tabview` | containers: layout, scrolling, clipping |
 | `led` `spinner` `image` `chart` | indicators; `image` takes a 2-bit bitmap (tools/img2c.py --bits 2) |
+| `keyboard` | on-screen keyboard that types into an `input` (letters, shift, digits/symbols page, space, delete, cursor, OK) |
 | `custom` | your own drawing callback, clipped to the widget box |
 
 Popups (drawn above everything): `dropdown` list, `msgbox`, `toast`.
@@ -43,6 +44,22 @@ Feed keys with `ui.key(WraithUI::KEY_UP|DOWN|LEFT|RIGHT|OK|BACK)`, or `keyDown/k
 (lists, rollers, tables and text areas scroll first); left/right changes sliders, spinboxes, arcs, toggles, tabs and moves
 the cursor in an input. OK activates. BACK closes a popup, otherwise pops the screen stack (`push/pop`), otherwise returns
 to the previous screen. Text: `ui.typeChar("ệ")` and `ui.backspace()` edit the focused input (UTF-8 aware).
+
+### Keyboard and text entry
+```cpp
+uint8_t in = ui.input(1, 0, 0, 192, 40);                 // y = 0, height automatic (14 px with the 5x7 font)
+uint8_t kb = ui.keyboard(1, 0, 16, 192, 45, in);         // 10 columns x 5 rows, 9 px per row minimum
+ui.on(kb, [](uint8_t id, uint8_t ev, int16_t v, void*) { if (ev == WraithUI::EV_CLICK) /* OK key pressed */; });
+```
+Keys: arrows move over the keys (a wide key such as space is one step), OK presses. Bottom row: symbols page, `<` `>` move the
+cursor inside the input, space, OK. Shift is one-shot like on a phone. The keys always use the built-in 5x7 font. With a hardware
+keypad: `ui.typeChar("x")` / `ui.backspace()` edit the keyboard's input even while the keyboard has the focus.
+
+### Icons in labels
+```cpp
+ui.addFallbackFont(&UFONT_SYM_15);  ui.setFont(lbl, &UFONT_VI_15);  ui.setText(lbl, SYM_WIFI " Home");
+```
+See `docs/SYMBOLS.md`.
 
 ## Events
 ```cpp

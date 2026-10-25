@@ -12,6 +12,8 @@ read the original licenses, and ask a lawyer if you plan to ship firmware commer
 | `CasioFont_VI_15.h`, `CasioFont_VI_24.h`, `CasioFont_VI_15B.h`, `CasioFont_NUM_36.h` (Vietnamese / digits) | DejaVu Sans and DejaVu Sans Bold (`fonts-dejavu-core`) | Bitstream Vera license + public-domain DejaVu changes |
 | `CasioFont_ZH_CN_15.h`, `_ZH_TW_15.h` (Chinese, 15 px) | Noto Sans CJK SC / TC (`fonts-noto-cjk`) | SIL Open Font License 1.1 |
 
+The symbol fonts (`CasioFont_SYM_*.h`) are original vector artwork drawn for this library by `tools/make_symbols.py`; they follow the library `LICENSE`.
+
 ## What this means in practice
 - **Noto Sans CJK (OFL 1.1) and DejaVu (Bitstream Vera)** are permissive. Keep their copyright notices and license texts
   with what you distribute. Do not give a derived font a name containing a Reserved Font Name or "Bitstream"/"Vera"

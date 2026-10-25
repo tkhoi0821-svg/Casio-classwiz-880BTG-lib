@@ -172,6 +172,7 @@ Generated from the headers in `src/` by `tools/gen_api.py` (do not edit by hand)
 - `uint8_t spinner (uint8_t scr, int16_t x, int16_t y, int16_t size)` - loading indicator
 - `uint8_t image (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, const uint8_t* bmp2bpp, int16_t transparent = -1)`
 - `uint8_t table (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, const char* const* cells, uint8_t cols, uint8_t rows, bool header = true)`
+- `uint8_t keyboard(uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, uint8_t targetInput = NONE)` - on-screen keyboard: 5 rows, shift / symbols / space / delete / cursor / OK
 - `uint8_t custom (uint8_t scr, int16_t x, int16_t y, int16_t w, int16_t h, DrawCb draw, void* user = nullptr, bool focusable = false)`
 #### widget properties
 
@@ -179,6 +180,7 @@ Generated from the headers in `src/` by `tools/gen_api.py` (do not edit by hand)
 - `void setLayout(uint8_t container, Layout l, uint8_t gap = 2, uint8_t pad = 2)`
 - `void setScrollable(uint8_t container, bool on)` - vertical + horizontal; follows focus; scrollbars
 - `void scrollTo(uint8_t container, int16_t x, int16_t y, uint16_t animMs = 0)`
+- `void setTarget(uint8_t keyboard, uint8_t input)` - which input a keyboard types into
 - `void setText(uint8_t id, const char* text)` - copied; truncated to the widget's capacity
 - `void setTextRef(uint8_t id, const char* text)` - NOT copied: must stay valid (flash strings, long texts)
 - `const char* text(uint8_t id) const`

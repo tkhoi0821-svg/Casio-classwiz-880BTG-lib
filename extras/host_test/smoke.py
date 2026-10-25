@@ -12,7 +12,7 @@ if shutil.which('ffmpeg'):
 PLAN = {
   'Basic': (3, '', 30), 'Animation': (40, '', 5), 'IconSweep': (2, '', 0), 'Showcase': (4, '', 200), 'Dashboard': (60, '', 200),
   'Haunted': (1, '', 0), 'UnicodeDemo': (2, '', 100), 'UnicodeCompact': (1, '', 200), 'Fonts': (1, '', 0),
-  'WraithDemo': (150, 'sddeewaq', 100), 'WraithShowcase': (250, 'esdesdsdaqes', 100), 'ConsoleDemo': (30, 'hello console\\nxin chao the gioi\\nu\\nd\\n', 100),
+  'WraithDemo': (150, 'sddeewaq', 100), 'WraithShowcase': (250, 'esdesdsdaqes', 100), 'WraithKeyboard': (200, 'eeddesqq', 50), 'ConsoleDemo': (30, 'hello console\\nxin chao the gioi\\nu\\nd\\n', 100),
   'QrDemo': (2, '', 500), 'MjpegPlayer': (400, '', 300), 'C2vPlayer': (400, '', 300),
 }
 FLAGS = ['-std=gnu++11', '-O1', '-g', '-fsanitize=address,undefined', '-fno-sanitize-recover=undefined', '-Wall', '-Wno-unused-variable', '-Wno-unused-parameter',

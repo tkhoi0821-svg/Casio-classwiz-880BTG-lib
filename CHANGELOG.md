@@ -3,6 +3,20 @@
 All notable changes. Versions before 1.0.0 were developed without access to the real panel for most of the new
 features; see "Verified vs not verified" in the README.
 
+## 1.2.0
+- **Icons in text**: 53 vector symbols (wifi, bluetooth, battery levels, charge, arrows, play/pause/stop, home, gear, check, close,
+  plus/minus, warning, info, bell, lock, mail, heart, star, sun, moon, trash, edit, refresh, search, menu, power, volume, mute,
+  clock, file, folder, download, upload, image, user, pin, signal, cloud, calendar, music, keyboard, light, ban ...). Antialiased
+  fonts in three sizes (`CasioFont_SYM_15.h`, `_16`, `_26`) plus UTF-8 macros (`SYM_WIFI` ...) in `CasioSymbols.h`; they work in
+  `print()`, in `printWrapped`, and inside WraithUI labels through `addFallbackFont`. `tools/make_symbols.py` renders them at any
+  size. `docs/SYMBOLS.md` and `docs/symbols.png` show them all.
+- **WraithUI keyboard widget** (`keyboard(scr, x, y, w, h, targetInput)`): letters, one-shot shift, digits and symbols page, space,
+  delete, cursor left/right, OK key; moves with the arrow keys, types into any input (`setTarget`), `typeChar/backspace` from a
+  physical keypad also go through a focused keyboard.
+- **`font2c.py --scan DIR`**: builds a font with only the non-ASCII characters used in your sketch files. Any size, any script (Chinese,
+  Thai, Japanese ...) for a few hundred bytes of flash. `tools/font_sizes.py` prints the flash cost of every font header.
+- Example `WraithKeyboard` (network list with status icons, password entry). Docs and API reference regenerated.
+
 ## 1.1.0
 - **WraithUI 2**: the widget toolkit grows from 9 to 23 widgets and gains the structure LVGL users expect. New widgets: panel,
   textarea, input, dropdown, roller, spinbox, tabview, arc, meter, led, spinner, image, table, custom (your own draw

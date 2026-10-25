@@ -5,7 +5,8 @@
   python font2c.py --font MyFont.ttf --size 12 --baseline 10 --text "ありがとう" --name UFONT_JA > ja.h
 
 Charsets (combine with commas): ascii, vi (Vietnamese), th (Thai), gb2312 (Simplified Chinese, ~4.4k glyphs),
-big5 (Traditional Chinese, ~5.5k glyphs). --text / --textfile add your own characters.
+big5 (Traditional Chinese, ~5.5k glyphs). --text / --textfile add your own characters; --scan DIR adds every non-ASCII character that appears in your sketch files
+(a font with only the characters you really use: any size, any script, a few hundred bytes of flash).
 Glyphs are 1-bit (default) or 2-bit antialiased with --aa (4 gray levels: the LCD blends them over any background),
 one cell per glyph, `height` rows tall. --aa options: --index N (font number inside a .ttc), --engine raqm|basic,
 --boost F (>1 darkens thin strokes), --width-pad N. Combining marks (category Mn) get adv=0 and are
@@ -23,6 +24,7 @@ ap.add_argument('--size', type=int, default=16); ap.add_argument('--baseline', t
 ap.add_argument('--height', type=int, default=None, help='cell height (default: size)')
 ap.add_argument('--charset', default=''); ap.add_argument('--text', default=''); ap.add_argument('--textfile')
 ap.add_argument('--strip-circle', action='store_true'); ap.add_argument('--threshold', type=int, default=128)
+ap.add_argument('--scan', action='append', default=[], help='file or folder: add every non-ASCII character used in its .ino/.h/.cpp/.c/.txt/.md/.json files (UTF-8); repeatable')
 ap.add_argument('--aa', action='store_true', help='2-bit antialiased glyphs'); ap.add_argument('--index', type=int, default=0)
 ap.add_argument('--engine', choices=['basic', 'raqm'], default='basic'); ap.add_argument('--boost', type=float, default=1.0)
 ap.add_argument('--width-pad', type=int, default=0, help='extra advance pixels added to every glyph (letter spacing)')
@@ -59,6 +61,22 @@ chars = set()
 for n in filter(None, a.charset.split(',')): chars.update(charset(n.strip()))
 chars.update(a.text)
 if a.textfile: chars.update(open(a.textfile, encoding='utf-8').read())
+import os
+def _scan(path):
+    found, files = set(), 0
+    paths = []
+    if os.path.isdir(path):
+        for root, _, names in os.walk(path):
+            paths += [os.path.join(root, n) for n in names if n.lower().endswith(('.ino', '.h', '.cpp', '.c', '.txt', '.md', '.json')) and not n.startswith('CasioFont_')]
+    else: paths = [path]
+    for p in paths:
+        try: text = open(p, encoding='utf-8', errors='ignore').read()
+        except OSError: continue
+        files += 1; found.update(ch for ch in text if ord(ch) > 127 and ord(ch) not in (0xFFFD, 0xFEFF, 0x200B))
+    return found, files
+for _p in a.scan:
+    _f, _n = _scan(_p); chars.update(_f)
+    print(f'// scan {_p}: {len(_f)} distinct non-ASCII characters in {_n} file(s)', file=sys.stderr)
 chars = {c for c in chars if c not in '\n\r\t' and ord(c) <= 0xFFFF}
 if not chars: sys.exit('no characters selected')
 
